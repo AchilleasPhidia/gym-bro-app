@@ -1,4 +1,4 @@
-# app.py - Gym Bro v4.1 (AI chat programs now update calendar, syntax fixed)
+# app.py - Gym Bro v4.1 (AI chat programs update calendar, no tabs, safe display)
 
 import streamlit as st
 import json
@@ -543,16 +543,12 @@ with tab1:
         if today_program:
             st.success(f"🎯 **{today_program['focus']}** day!")
             for ex in today_program["exercises"]:
-                sets = ex.get('sets', '?')
-		reps = ex.get('reps', '?')
-		notes = ex.get('notes', '')
-		notes_str = f" ({notes})" if notes else ""
-		st.write(f"• **{ex.get('name', 'Unknown')}** – {sets}×{reps}{notes_str}")
+                st.write(f"• **{ex['name']}** – {ex['sets']}×{ex['reps']} {('('+ex['notes']+')') if ex.get('notes') else ''}")
             if st.button("Log This Workout", type="primary"):
                 # Pre-fill the workout tab
                 st.session_state.current_exercises = []
                 for ex in today_program["exercises"]:
-                    sets = [{"weight": 20.0, "reps": 10, "notes": ex['notes']} for _ in range(ex['sets'])]
+                    sets = [{"weight": 20.0, "reps": 10, "notes": ex.get('notes', '')} for _ in range(ex.get('sets', 3))]
                     st.session_state.current_exercises.append({"name": ex['name'], "sets": sets})
                 st.rerun()
         else:
@@ -690,7 +686,7 @@ with tab3:
             for a in gym_bro.achievements[-5:]:
                 st.write(f"- {a['exercise']}: +{a['improvement']}% on {a['date'][:10]}")
 
-# --- TAB 4: MY PROGRAM ---
+# --- TAB 4: MY PROGRAM (safe display) ---
 with tab4:
     st.header("Your Personalized Program")
     if not gym_bro.current_program:
@@ -713,7 +709,9 @@ with tab4:
                     st.write(f"• **{name}** – {sets}×{reps}{notes_str}")
         if st.button("🔄 Regenerate Program"):
             gym_bro.generate_program()
-            st.rerun()# --- TAB 5: AI CHAT (UPDATED) ---
+            st.rerun()
+
+# --- TAB 5: AI CHAT (UPDATED) ---
 with tab5:
     st.header("💬 Chat with Gym Bro AI")
     if "chat_messages" not in st.session_state:
