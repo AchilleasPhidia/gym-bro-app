@@ -1,4 +1,4 @@
-# app.py - Gym Bro v3.0 (Auto-fill weights, Delete users, Better UI)
+# app.py - Gym Bro v3.0 (Fixed deletion + smart auto-fill sets)
 
 import streamlit as st
 import json
@@ -141,7 +141,6 @@ class GymBro:
         }
 
     def get_progress(self):
-        """Return all exercises and their history."""
         if not self.exercise_progress:
             return None
         summary = {}
@@ -160,7 +159,6 @@ class GymBro:
         return summary
 
     def ai_chat(self, user_message, conversation_history):
-        """Use OpenAI (or fallback) – include last workout summary if available."""
         last_workout_context = ""
         if self.workouts:
             last = self.workouts[-1]
@@ -169,7 +167,6 @@ class GymBro:
                 f"User's last workout: {len(exercises)} exercises – {', '.join(exercises)}. "
                 f"Energy: {last['energy_level']}/10, Sleep: {last['sleep_quality']}/10, Duration: {last['duration_minutes']} min."
             )
-
         try:
             from openai import OpenAI
             if "OPENAI_API_KEY" in st.secrets:
@@ -191,7 +188,6 @@ Be encouraging but honest. Keep responses under 150 words.
                 return response.choices[0].message.content
         except:
             pass
-
         # Offline fallback
         msg = user_message.lower()
         if any(word in msg for word in ["squat", "bench", "deadlift", "form"]):
@@ -215,7 +211,7 @@ Be encouraging but honest. Keep responses under 150 words.
 
 st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
 
-# --- Helper functions ---
+# --- Helpers ---
 def get_existing_users():
     if not os.path.exists("user_data"):
         return []
@@ -235,7 +231,6 @@ existing_users = get_existing_users()
 if "selected_user" not in st.session_state:
     st.session_state.selected_user = None
 
-# Decide how to show user selection
 if existing_users:
     user_option = st.sidebar.radio("Select or new user", ["Existing user", "New user"])
     if user_option == "Existing user":
@@ -255,14 +250,20 @@ else:
 username = st.session_state.selected_user
 
 if username:
-    # Initialize Gym Bro for this user
     if "gym_bro" not in st.session_state or st.session_state.get("current_user") != username:
         st.session_state.gym_bro = GymBro(username)
         st.session_state.current_user = username
         st.session_state.show_intro = True
         st.session_state.current_exercises = []
         st.session_state.chat_messages = []
-        # Auto-fill memory: we'll rely on Streamlit's built-in widget state, so nothing extra needed
+        # Initialize set data session state keys
+        for i in range(5):  # max 5 sets
+            if f"w_{i}" not in st.session_state:
+                st.session_state[f"w_{i}"] = 20.0
+            if f"r_{i}" not in st.session_state:
+                st.session_state[f"r_{i}"] = 10
+            if f"n_{i}" not in st.session_state:
+                st.session_state[f"n_{i}"] = ""
 
 gym_bro = st.session_state.gym_bro
 
@@ -271,24 +272,38 @@ st.sidebar.metric("Total Workouts", len(gym_bro.workouts))
 if gym_bro.achievements:
     st.sidebar.write(f"🏆 {len(gym_bro.achievements)} Achievements")
 
-# --- Delete user button (danger zone) ---
+# --- Delete user section (fixed) ---
 st.sidebar.markdown("---")
-if st.sidebar.button("🗑️ Delete this user", help="Permanently delete all data for this user"):
-    confirm = st.sidebar.checkbox("I'm sure. Delete all data.")
-    if confirm:
-        if delete_user_folder(username):
-            st.sidebar.success(f"User '{username}' deleted.")
-            # Clear session state for this user
-            if st.session_state.current_user == username:
-                del st.session_state.gym_bro
-                st.session_state.current_user = None
-                st.session_state.selected_user = None
-                st.session_state.current_exercises = []
-                st.session_state.chat_messages = []
-                st.session_state.show_intro = True
+if "delete_mode" not in st.session_state:
+    st.session_state.delete_mode = False
+
+if not st.session_state.delete_mode:
+    if st.sidebar.button("🗑️ Delete this user", help="Permanently delete all data for this user"):
+        st.session_state.delete_mode = True
+        st.rerun()
+else:
+    st.sidebar.warning(f"Are you sure you want to delete '{username}'? All data will be lost.")
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        if st.button("Yes, delete", type="primary"):
+            if delete_user_folder(username):
+                st.sidebar.success(f"User '{username}' deleted.")
+                if st.session_state.current_user == username:
+                    del st.session_state.gym_bro
+                    st.session_state.current_user = None
+                    st.session_state.selected_user = None
+                    st.session_state.current_exercises = []
+                    st.session_state.chat_messages = []
+                    st.session_state.show_intro = True
+                st.session_state.delete_mode = False
+                st.rerun()
+            else:
+                st.sidebar.error("Could not delete user.")
+                st.session_state.delete_mode = False
+    with col2:
+        if st.button("Cancel"):
+            st.session_state.delete_mode = False
             st.rerun()
-        else:
-            st.sidebar.error("Could not delete user.")
 
 # --- Main Content ---
 st.title("🏋️‍♂️ Gym Bro – Your AI Training Partner")
@@ -354,24 +369,43 @@ else:
 
         num_sets = st.selectbox("Number of sets", [1,2,3,4,5], index=2)
         sets_data = []
-        for i in range(num_sets):
-            # Auto-fill: use session state value if it exists, otherwise default to 20.0/10
-            default_weight = st.session_state.get(f"w_{i}", 20.0)
-            default_reps = st.session_state.get(f"r_{i}", 10)
-            default_notes = st.session_state.get(f"n_{i}", "")
 
-            cols = st.columns(3)
-            with cols[0]:
-                weight = st.number_input(f"Set {i+1} Weight (kg)", 0.0, 500.0, default_weight, key=f"w_{i}")
-            with cols[1]:
-                reps = st.number_input(f"Set {i+1} Reps", 1, 30, default_reps, key=f"r_{i}")
-            with cols[2]:
-                notes = st.text_input(f"Set {i+1} Notes", default_notes, key=f"n_{i}")
+        # Set 1 (with Apply button for the rest)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            w0 = st.number_input("Set 1 Weight (kg)", 0.0, 500.0, st.session_state.w_0, key="w_0")
+        with col2:
+            r0 = st.number_input("Set 1 Reps", 1, 30, st.session_state.r_0, key="r_0")
+        with col3:
+            n0 = st.text_input("Set 1 Notes", st.session_state.n_0, key="n_0")
+        sets_data.append({"weight": w0, "reps": r0, "notes": n0})
+
+        if num_sets > 1:
+            if st.button("⬇️ Apply Set 1 values to all other sets", use_container_width=True):
+                for i in range(1, num_sets):
+                    st.session_state[f"w_{i}"] = w0
+                    st.session_state[f"r_{i}"] = r0
+                    st.session_state[f"n_{i}"] = n0
+                st.rerun()
+
+        # Sets 2+
+        for i in range(1, num_sets):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                weight = st.number_input(f"Set {i+1} Weight (kg)", 0.0, 500.0, st.session_state[f"w_{i}"], key=f"w_{i}")
+            with col2:
+                reps = st.number_input(f"Set {i+1} Reps", 1, 30, st.session_state[f"r_{i}"], key=f"r_{i}")
+            with col3:
+                notes = st.text_input(f"Set {i+1} Notes", st.session_state[f"n_{i}"], key=f"n_{i}")
             sets_data.append({"weight": weight, "reps": reps, "notes": notes})
 
         if st.button("➕ Add to workout", use_container_width=True):
             st.session_state.current_exercises.append({"name": exercise_name, "sets": sets_data})
-            # We do NOT reset the set keys – they'll stay and auto-fill the next exercise
+            # Reset the set session state so the next exercise starts fresh (optional)
+            for i in range(5):
+                st.session_state[f"w_{i}"] = 20.0
+                st.session_state[f"r_{i}"] = 10
+                st.session_state[f"n_{i}"] = ""
             st.rerun()
 
         if st.session_state.current_exercises:
