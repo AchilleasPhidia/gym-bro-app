@@ -699,16 +699,21 @@ with tab4:
             st.rerun()
     else:
         prog = gym_bro.current_program
-        st.subheader(prog["program_name"])
-        for d in prog["days"]:
-            with st.expander(f"📅 {d['day']} – {d['focus']}"):
-                for ex in d["exercises"]:
-                    st.write(f"• **{ex['name']}** – {ex['sets']}×{ex['reps']} {('('+ex['notes']+')') if ex.get('notes') else ''}")
+        st.subheader(prog.get("program_name", "My Program"))
+        for d in prog.get("days", []):
+            day_name = d.get("day", "Unknown")
+            focus = d.get("focus", "General")
+            with st.expander(f"📅 {day_name} – {focus}"):
+                for ex in d.get("exercises", []):
+                    name = ex.get("name", "Exercise")
+                    sets = ex.get("sets", "?")
+                    reps = ex.get("reps", "?")
+                    notes = ex.get("notes", "")
+                    notes_str = f" ({notes})" if notes else ""
+                    st.write(f"• **{name}** – {sets}×{reps}{notes_str}")
         if st.button("🔄 Regenerate Program"):
             gym_bro.generate_program()
-            st.rerun()
-
-# --- TAB 5: AI CHAT (UPDATED) ---
+            st.rerun()# --- TAB 5: AI CHAT (UPDATED) ---
 with tab5:
     st.header("💬 Chat with Gym Bro AI")
     if "chat_messages" not in st.session_state:
