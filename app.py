@@ -280,7 +280,7 @@ Return ONLY a valid JSON object with this structure:
                     model="gpt-3.5-turbo",
                     messages=messages,
                     temperature=0.8,
-                    max_tokens=700
+                    max_tokens=2000
                 )
                 return resp.choices[0].message.content
         except:

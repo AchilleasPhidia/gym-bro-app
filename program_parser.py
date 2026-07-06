@@ -1,12 +1,29 @@
-# program_parser.py – now with auto‑repair of common JSON errors
+# program_parser.py – now repairs truncated JSON and missing commas
 import json
 import re
 
-def _simple_json_repair(json_str: str) -> str:
-    """Attempt to fix missing commas, stray characters, etc."""
-    # Remove trailing commas before a closing bracket or brace
+def _repair_truncated_json(json_str: str) -> str:
+    """Attempt to close unclosed braces and brackets."""
+    # Count open and close braces/brackets
+    open_braces = json_str.count('{')
+    close_braces = json_str.count('}')
+    open_brackets = json_str.count('[')
+    close_brackets = json_str.count(']')
+    # Add missing closing characters at the end
+    missing_braces = open_braces - close_braces
+    missing_brackets = open_brackets - close_brackets
+    # We must close brackets before braces to respect nesting
+    if missing_brackets > 0:
+        json_str += ']' * missing_brackets
+    if missing_braces > 0:
+        json_str += '}' * missing_braces
+    # Remove trailing comma if present before closing
     json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
-    # Remove any stray text after the final closing brace (if JSON is embedded)
+    return json_str
+
+def _simple_json_repair(json_str: str) -> str:
+    """Remove trailing commas and stray text after final brace."""
+    json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
     last_brace = json_str.rfind('}')
     if last_brace != -1:
         json_str = json_str[:last_brace+1]
@@ -38,16 +55,22 @@ def parse_program_payload(text: str):
 
     raw_json = match.group(1)
 
-    # Attempt to parse, with repair if needed
+    # Try to parse, with progressive repairs
     prog = None
     try:
         prog = json.loads(raw_json)
     except json.JSONDecodeError:
+        # First repair: remove trailing commas / extra text
         repaired = _simple_json_repair(raw_json)
         try:
             prog = json.loads(repaired)
-        except json.JSONDecodeError as e:
-            return None, f"JSON decode error after repair: {e}"
+        except json.JSONDecodeError:
+            # Second repair: close truncated structures
+            repaired = _repair_truncated_json(repaired)
+            try:
+                prog = json.loads(repaired)
+            except json.JSONDecodeError as e:
+                return None, f"JSON decode error after full repair: {e}"
 
     if prog is None:
         return None, "Failed to parse JSON."
