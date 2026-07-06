@@ -1,6 +1,16 @@
-# program_parser.py
+# program_parser.py – now with auto‑repair of common JSON errors
 import json
 import re
+
+def _simple_json_repair(json_str: str) -> str:
+    """Attempt to fix missing commas, stray characters, etc."""
+    # Remove trailing commas before a closing bracket or brace
+    json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+    # Remove any stray text after the final closing brace (if JSON is embedded)
+    last_brace = json_str.rfind('}')
+    if last_brace != -1:
+        json_str = json_str[:last_brace+1]
+    return json_str
 
 def parse_program_payload(text: str):
     """Try to extract a valid program JSON from a string.
@@ -26,15 +36,25 @@ def parse_program_payload(text: str):
     if not match:
         return None, "No JSON object with 'program_name' and 'days' found."
 
+    raw_json = match.group(1)
+
+    # Attempt to parse, with repair if needed
+    prog = None
     try:
-        prog = json.loads(match.group(1))
-    except json.JSONDecodeError as e:
-        return None, f"JSON decode error: {e}"
+        prog = json.loads(raw_json)
+    except json.JSONDecodeError:
+        repaired = _simple_json_repair(raw_json)
+        try:
+            prog = json.loads(repaired)
+        except json.JSONDecodeError as e:
+            return None, f"JSON decode error after repair: {e}"
+
+    if prog is None:
+        return None, "Failed to parse JSON."
 
     if not isinstance(prog, dict) or "program_name" not in prog or "days" not in prog:
         return None, "JSON is missing required keys 'program_name' or 'days'."
 
-    # Validate that days is a list of objects with at least day and exercises
     days = prog.get("days")
     if not isinstance(days, list) or len(days) == 0:
         return None, "'days' must be a non-empty list."
