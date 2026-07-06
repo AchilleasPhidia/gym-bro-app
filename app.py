@@ -486,7 +486,7 @@ if not st.session_state.get('show_intro', False):
                 })
                 st.rerun()
 
-        # Show current exercises
+                # Show current exercises
         if st.session_state.current_exercises:
             st.markdown("---")
             st.subheader("Today's Exercises")
@@ -497,14 +497,14 @@ if not st.session_state.get('show_intro', False):
                     with cols[0]:
                         st.markdown(f"**{ex['name']}**")
                         for j, s in enumerate(ex["sets"]):
-                            st.caption(f"Set {j+1}: {s['weight']}kg × {s['reps']} reps {f'({s[\"notes\"]})' if s['notes'] else ''}")
+                            notes_text = f"({s['notes']})" if s.get('notes') else ""
+                            st.caption(f"Set {j+1}: {s['weight']}kg × {s['reps']} reps {notes_text}")
                     with cols[1]:
                         if st.button("🗑️", key=f"remove_{i}"):
                             st.session_state.current_exercises.pop(i)
                             st.rerun()
 
             st.markdown("---")
-
             if st.button("✅ Complete Workout", type="primary", use_container_width=True):
                 result = gym_bro.log_workout(
                     exercises_data=st.session_state.current_exercises,
