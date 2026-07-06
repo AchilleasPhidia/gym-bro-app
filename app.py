@@ -1,4 +1,4 @@
-# app.py - Gym Bro v5.0 (Beautiful mobile UI, AI program manipulation, all fixes)
+# app.py - Gym Bro v5.1 (AI obeys program commands, better JSON detection, beautiful UI)
 
 import streamlit as st
 import json
@@ -259,21 +259,21 @@ Respond ONLY with valid JSON. Structure:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                 system_prompt = (
                     "You are Gym Bro, a supportive and knowledgeable gym coach. "
-                    "You give advice on exercises, form, nutrition, motivation, and programming. "
-                    "Speak like a friendly bro: use 'bro', emojis, and hype. "
-                    "Be encouraging but honest. Keep responses under 150 words unless you are providing a program.\n"
+                    "Speak like a friendly bro: use 'bro', emojis, and hype.\n"
                     f"{last_workout_context}\n"
                     f"{program_context}\n"
-                    "IMPORTANT: If the user asks you to create, update, or modify their workout program (including adding/removing days, changing exercises, etc.), you MUST respond with the COMPLETE updated program as a valid JSON object wrapped in a code block like:\n"
+                    "CRITICAL RULE: If the user asks you to CREATE, UPDATE, MODIFY, ADD, REMOVE, or CHANGE their workout program in any way, "
+                    "you MUST respond ONLY with a valid JSON object inside a code block. The JSON must have this structure:\n"
                     "```json\n"
                     "{\n"
-                    '  "program_name": "...",\n'
+                    '  "program_name": "string",\n'
                     '  "days": [\n'
                     '    {"day": "Monday", "focus": "...", "exercises": [{"name": "...", "sets": 3, "reps": "8-10", "notes": "..."}]}\n'
                     "  ]\n"
                     "}\n"
                     "```\n"
-                    "Include ALL days, even unchanged ones. Do not include any other text outside the code block when providing the program."
+                    "Include ALL days, even unchanged ones. Do NOT add any other text, explanations, or greetings – ONLY the JSON block.\n"
+                    "If the user is NOT asking about program changes, reply normally like a helpful bro coach."
                 )
                 messages = [{"role": "system", "content": system_prompt}]
                 messages.extend(conversation_history[-6:])
@@ -288,24 +288,25 @@ Respond ONLY with valid JSON. Structure:
         except:
             pass
 
+        # Offline fallback
         msg = user_message.lower()
         if any(word in msg for word in ["squat", "bench", "deadlift", "form"]):
-            return "Bro! Focus on form: keep your core tight, control the weight, and don't ego-lift. Slow and steady wins the gains! 🎯"
+            return "Bro! Focus on form: keep your core tight, control the weight, and don't ego-lift. 🎯"
         elif any(word in msg for word in ["eat", "nutrition", "food", "protein"]):
-            return "Eat big, eat clean! Protein is your best friend – aim for 1.6–2.2g per kg of bodyweight. Don't forget carbs for energy! 🍗🥗"
+            return "Eat big, eat clean! Protein is your best friend – aim for 1.6–2.2g per kg of bodyweight. 🍗🥗"
         elif any(word in msg for word in ["motivation", "lazy", "tired"]):
-            return "Bro, even on days you don't feel like it – just show up. The hardest rep is walking through the door. You got this! 💪🔥"
+            return "Bro, even on days you don't feel like it – just show up. The hardest rep is walking through the door. 💪🔥"
         elif any(word in msg for word in ["program", "routine", "split"]):
-            return "A solid PPL (Push/Pull/Legs) split is great for beginners. Train each muscle twice a week, 3–4 exercises per session, 3–4 sets of 8–12 reps. Consistency beats perfection! 🗓️"
+            return "A solid PPL split is great. Train each muscle twice a week, 3–4 sets of 8–12 reps. 🗓️"
         elif any(word in msg for word in ["sore", "pain", "rest"]):
-            return "Soreness is normal, sharp pain isn't. Listen to your body, take an extra rest day if needed, and come back stronger. Recovery is part of training! 🛌"
+            return "Soreness is normal, sharp pain isn't. Take an extra rest day if needed. 🛌"
         elif any(word in msg for word in ["cardio", "running", "fat"]):
-            return "Cardio is great for heart health, but don't overdo it if you're trying to build muscle. 2–3 sessions of 20–30 min per week is plenty. Balance is key! 🏃"
+            return "Cardio is great, but don't overdo it if you're building muscle. 2–3 sessions of 20–30 min per week. 🏃"
         else:
-            return f"Bro, I'm in offline mode. Ask me about form, nutrition, motivation, or programming – I've got you covered! 💪"
+            return f"Bro, I'm in offline mode. Ask me about form, nutrition, motivation, or programming. 💪"
 
 # ============================================
-# STREAMLIT UI v5.0 - Beautiful & Mobile-First
+# STREAMLIT UI v5.1 – Beautiful & Mobile-First
 # ============================================
 
 st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
@@ -595,7 +596,6 @@ with tab1:
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
 
-    # Mobile-friendly calendar: show as a scrollable row
     days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     cols = st.columns(7)
     workout_dates = {datetime.fromisoformat(w["date"]).date() for w in gym_bro.workouts}
@@ -621,7 +621,6 @@ with tab1:
     st.caption("✅ Trained   📋 Planned")
     st.markdown("---")
 
-    # Today's planned session
     st.subheader("Today's Session")
     if gym_bro.current_program:
         today_name = today.strftime("%A")
@@ -816,7 +815,7 @@ with tab5:
         with st.chat_message(msg["role"], avatar="💪" if msg["role"]=="assistant" else None):
             st.write(msg["content"])
 
-    # Detect program in last assistant message
+    # Robust program detection from last assistant message
     last_assistant_msg = None
     for msg in reversed(st.session_state.chat_messages):
         if msg["role"] == "assistant":
@@ -825,10 +824,15 @@ with tab5:
 
     program_json = None
     if last_assistant_msg:
-        match = re.search(r'```json\s*(\{.*?\})\s*```', last_assistant_msg, re.DOTALL)
+        # Try to find a JSON code block (with or without language specifier)
+        match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', last_assistant_msg, re.DOTALL)
+        if not match:
+            # Maybe the AI just put raw JSON without code block? Look for a JSON object with program_name
+            match = re.search(r'(\{.*?"program_name".*?\})', last_assistant_msg, re.DOTALL)
         if match:
             try:
-                program_json = json.loads(match.group(1))
+                candidate = match.group(1)
+                program_json = json.loads(candidate)
                 if "program_name" not in program_json or "days" not in program_json:
                     program_json = None
             except:
@@ -850,4 +854,4 @@ with tab5:
         st.rerun()
 
 st.markdown("---")
-st.caption(f"Gym Bro v5.0 | User: {username} | We go jim! 🏋️")
+st.caption(f"Gym Bro v5.1 | User: {username} | We go jim! 🏋️")
