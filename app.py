@@ -543,7 +543,11 @@ with tab1:
         if today_program:
             st.success(f"🎯 **{today_program['focus']}** day!")
             for ex in today_program["exercises"]:
-                st.write(f"• **{ex['name']}** – {ex['sets']}×{ex['reps']} {('('+ex['notes']+')') if ex['notes'] else ''}")
+                sets = ex.get('sets', '?')
+		reps = ex.get('reps', '?')
+		notes = ex.get('notes', '')
+		notes_str = f" ({notes})" if notes else ""
+		st.write(f"• **{ex.get('name', 'Unknown')}** – {sets}×{reps}{notes_str}")
             if st.button("Log This Workout", type="primary"):
                 # Pre-fill the workout tab
                 st.session_state.current_exercises = []
