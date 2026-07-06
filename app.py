@@ -1,4 +1,4 @@
-# app.py - Gym Bro v7.0 (All tabs working + AI control, web search, form check)
+# app.py – Gym Bro v7.1 (All tabs, AI‑controlled, robust error handling)
 
 import streamlit as st
 import json
@@ -198,7 +198,7 @@ class GymBro:
 
 st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
 
-# Custom CSS (unchanged beautiful theme)
+# Custom CSS (same beautiful theme)
 st.markdown("""
 <style>
     :root {
@@ -401,9 +401,7 @@ if st.session_state.get("show_intro", False):
         st.rerun()
     st.stop()
 
-# ============================================
-# TABS
-# ============================================
+# Tabs
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📅 Calendar", "💪 Log Workout", "📊 Progress", "🎯 My Program", "🤖 AI Chat", "📸 Form Check"])
 
 # --- TAB 1: CALENDAR ---
@@ -585,7 +583,7 @@ with tab4:
             gym_bro.generate_program()
             st.rerun()
 
-# --- TAB 5: AI CHAT (powered by GPT-4 function calling) ---
+# --- TAB 5: AI CHAT (function calling with error handling) ---
 with tab5:
     st.header("💬 Chat with Gym Bro AI")
     if "chat_messages" not in st.session_state:
@@ -594,6 +592,7 @@ with tab5:
         with st.chat_message(msg["role"], avatar="💪" if msg["role"]=="assistant" else None):
             st.markdown(msg["content"])
 
+    # Define functions the AI can call
     functions = [
         {
             "name": "create_program",
@@ -661,9 +660,14 @@ with tab5:
                         else:
                             reply = f"Couldn't update program: {err}"
                     elif func_name == "log_todays_workout":
-                        exercises = json.loads(args["exercises"])
-                        result = gym_bro.log_workout(exercises, 7, 7, 60)
-                        reply = f"Workout logged! {result['feedback']}"
+                        try:
+                            exercises = json.loads(args["exercises"])
+                            if not isinstance(exercises, list):
+                                raise ValueError("Exercises must be a list")
+                            result = gym_bro.log_workout(exercises, 7, 7, 60)
+                            reply = f"Workout logged! {result['feedback']}"
+                        except Exception as e:
+                            reply = f"Couldn't log workout: {e}"
                     elif func_name == "search_web":
                         results = search_exercises(args["query"])
                         reply = f"Search results:\n{results}"
@@ -692,4 +696,4 @@ with tab6:
                     st.error(f"Form analysis failed: {e}")
 
 st.markdown("---")
-st.caption(f"Gym Bro v7.0 | User: {username} | We go jim! 🏋️")
+st.caption(f"Gym Bro v7.1 | User: {username} | We go jim! 🏋️")
