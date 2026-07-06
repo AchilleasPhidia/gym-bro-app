@@ -1,4 +1,4 @@
-# app.py - Gym Bro v4.1 (AI chat programs update calendar, no tabs, safe display)
+# app.py - Gym Bro v5.0 (Beautiful mobile UI, AI program manipulation, all fixes)
 
 import streamlit as st
 import json
@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 import pandas as pd
 
 # ============================================
-# GYM BRO CLASS (now with profile & programs)
+# GYM BRO CLASS (profile, programs, AI)
 # ============================================
 
 class GymBro:
@@ -52,11 +52,8 @@ class GymBro:
         self._save_json("profile.json", self.profile)
 
     def generate_program(self):
-        """Generate a weekly program using AI (or offline logic) based on profile."""
         if not self.profile:
             return None
-
-        # Try OpenAI first
         try:
             from openai import OpenAI
             if "OPENAI_API_KEY" in st.secrets:
@@ -91,7 +88,7 @@ Respond ONLY with valid JSON. Structure:
         except:
             pass
 
-        # Offline fallback program
+        # Offline fallback
         days_map = {2: ["Monday", "Thursday"], 3: ["Monday", "Wednesday", "Friday"],
                     4: ["Monday", "Tuesday", "Thursday", "Friday"],
                     5: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]}
@@ -209,7 +206,6 @@ Respond ONLY with valid JSON. Structure:
                 longest = max(longest, temp)
             else:
                 temp = 1
-        # Weekly consistency: days worked in last 7 days
         last_7 = [today - timedelta(days=i) for i in range(7)]
         days_worked = sum(1 for d in last_7 if d in workout_dates)
         return {
@@ -245,6 +241,18 @@ Respond ONLY with valid JSON. Structure:
                 f"User's last workout: {len(exercises)} exercises – {', '.join(exercises)}. "
                 f"Energy: {last['energy_level']}/10, Sleep: {last['sleep_quality']}/10, Duration: {last['duration_minutes']} min."
             )
+
+        program_context = ""
+        if self.current_program:
+            prog = self.current_program
+            days_desc = []
+            for d in prog.get("days", []):
+                day = d.get("day", "?")
+                focus = d.get("focus", "?")
+                ex_names = [ex.get("name", "?") for ex in d.get("exercises", [])]
+                days_desc.append(f"{day}: {focus} ({', '.join(ex_names)})")
+            program_context = "Current program: " + "; ".join(days_desc) + ". "
+
         try:
             from openai import OpenAI
             if "OPENAI_API_KEY" in st.secrets:
@@ -255,7 +263,8 @@ Respond ONLY with valid JSON. Structure:
                     "Speak like a friendly bro: use 'bro', emojis, and hype. "
                     "Be encouraging but honest. Keep responses under 150 words unless you are providing a program.\n"
                     f"{last_workout_context}\n"
-                    "IMPORTANT: If the user asks you to create or update their workout program, you MUST respond with a valid JSON object wrapped in a code block like:\n"
+                    f"{program_context}\n"
+                    "IMPORTANT: If the user asks you to create, update, or modify their workout program (including adding/removing days, changing exercises, etc.), you MUST respond with the COMPLETE updated program as a valid JSON object wrapped in a code block like:\n"
                     "```json\n"
                     "{\n"
                     '  "program_name": "...",\n'
@@ -264,7 +273,7 @@ Respond ONLY with valid JSON. Structure:
                     "  ]\n"
                     "}\n"
                     "```\n"
-                    "Do not include any other text outside the code block if you are providing the program."
+                    "Include ALL days, even unchanged ones. Do not include any other text outside the code block when providing the program."
                 )
                 messages = [{"role": "system", "content": system_prompt}]
                 messages.extend(conversation_history[-6:])
@@ -279,7 +288,6 @@ Respond ONLY with valid JSON. Structure:
         except:
             pass
 
-        # Offline fallback
         msg = user_message.lower()
         if any(word in msg for word in ["squat", "bench", "deadlift", "form"]):
             return "Bro! Focus on form: keep your core tight, control the weight, and don't ego-lift. Slow and steady wins the gains! 🎯"
@@ -297,48 +305,91 @@ Respond ONLY with valid JSON. Structure:
             return f"Bro, I'm in offline mode. Ask me about form, nutrition, motivation, or programming – I've got you covered! 💪"
 
 # ============================================
-# STREAMLIT UI (v4.1)
+# STREAMLIT UI v5.0 - Beautiful & Mobile-First
 # ============================================
 
 st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
 
-# Custom CSS for beautiful, mobile-friendly design
+# Custom CSS for a modern, mobile-friendly design
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    html, body, [class*="css"] {
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    * {
         font-family: 'Inter', sans-serif;
     }
+
+    /* Main container spacing */
     .main .block-container {
-        padding-top: 1rem;
+        padding: 1rem 0.5rem;
     }
-    .stButton>button {
-        border-radius: 12px;
+
+    /* Headers */
+    h1, h2, h3 {
+        font-weight: 700;
+        letter-spacing: -0.5px;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        border-radius: 14px;
         background: linear-gradient(135deg, #FF4B4B, #FF6B6B);
         color: white;
         font-weight: 600;
         border: none;
-        transition: all 0.2s;
+        padding: 0.6rem 1.2rem;
+        transition: all 0.2s ease;
+        font-size: 0.95rem;
+        width: 100%;
     }
-    .stButton>button:hover {
+    .stButton > button:hover {
         background: linear-gradient(135deg, #FF6B6B, #FF4B4B);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(255,75,75,0.4);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 15px rgba(255,75,75,0.3);
     }
+
+    /* Secondary buttons */
+    .secondary-btn button {
+        background: #2d2d2d !important;
+        border: 1px solid #444 !important;
+        color: #ddd !important;
+    }
+
+    /* Cards */
     .streak-card {
-        background: linear-gradient(135deg, #1e1e1e, #2d2d2d);
-        border-radius: 16px;
-        padding: 1.2rem;
-        margin: 0.5rem 0;
+        background: linear-gradient(145deg, #1e1e1e, #2a2a2a);
+        border-radius: 18px;
+        padding: 1rem 0.5rem;
+        margin: 0.3rem 0;
         border: 1px solid #333;
+        text-align: center;
+    }
+    .streak-card h3 {
+        margin: 0;
+        font-size: 1.8rem;
+        font-weight: 700;
+    }
+    .streak-card small {
+        color: #aaa;
+        font-size: 0.8rem;
+    }
+
+    /* Calendar */
+    .calendar-grid {
+        display: flex;
+        justify-content: space-around;
+        flex-wrap: wrap;
+        gap: 4px;
     }
     .calendar-day {
         background: #1e1e1e;
-        border-radius: 12px;
-        padding: 0.8rem;
-        margin: 0.3rem;
+        border-radius: 14px;
+        padding: 0.6rem 0.3rem;
+        margin: 2px;
         text-align: center;
         border: 1px solid #333;
+        flex: 1 1 0;
+        min-width: 32px;
     }
     .calendar-day.trained {
         border: 2px solid #FF4B4B;
@@ -346,14 +397,57 @@ st.markdown("""
     }
     .calendar-day.planned {
         border: 2px solid #4B9FFF;
+        background: #1a1a2d;
     }
+    .calendar-day strong {
+        font-size: 0.7rem;
+        display: block;
+        opacity: 0.7;
+    }
+    .calendar-day span {
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    /* Expanders */
+    .streamlit-expanderHeader {
+        font-weight: 600;
+        font-size: 1rem;
+        border-radius: 10px;
+        background: #1e1e1e;
+        border: 1px solid #333;
+    }
+
+    /* Chat messages */
+    .stChatMessage {
+        border-radius: 16px;
+        padding: 0.8rem;
+        margin: 0.4rem 0;
+        background: #1a1a1a;
+    }
+
+    /* Mobile adjustments */
     @media (max-width: 768px) {
+        .main .block-container {
+            padding: 0.5rem 0.2rem;
+        }
         .streak-card {
-            padding: 0.8rem;
+            padding: 0.6rem 0.3rem;
+        }
+        .streak-card h3 {
+            font-size: 1.4rem;
         }
         .calendar-day {
-            padding: 0.4rem;
-            font-size: 0.8rem;
+            padding: 0.4rem 0.2rem;
+        }
+        .calendar-day strong {
+            font-size: 0.6rem;
+        }
+        h1 {
+            font-size: 1.5rem;
+        }
+        h2 {
+            font-size: 1.2rem;
         }
     }
 </style>
@@ -373,119 +467,118 @@ def delete_user_folder(username):
     return False
 
 # --- Sidebar: User Management ---
-st.sidebar.title("👤 User")
-existing_users = get_existing_users()
+with st.sidebar:
+    st.title("👤 User")
+    existing_users = get_existing_users()
 
-if "selected_user" not in st.session_state:
-    st.session_state.selected_user = None
+    if "selected_user" not in st.session_state:
+        st.session_state.selected_user = None
 
-if existing_users:
-    user_option = st.sidebar.radio("Select or new user", ["Existing user", "New user"], horizontal=True)
-    if user_option == "Existing user":
-        selected = st.sidebar.selectbox("Choose your profile", existing_users)
-        st.session_state.selected_user = selected
+    if existing_users:
+        user_option = st.radio("Select or new user", ["Existing user", "New user"], horizontal=True)
+        if user_option == "Existing user":
+            selected = st.selectbox("Choose your profile", existing_users)
+            st.session_state.selected_user = selected
+        else:
+            new_name = st.text_input("Enter new username", placeholder="e.g. IronWarrior")
+            if new_name:
+                if new_name in existing_users:
+                    st.warning("That user already exists.")
+                else:
+                    st.session_state.selected_user = new_name
     else:
-        new_name = st.sidebar.text_input("Enter new username", placeholder="e.g. IronWarrior")
-        if new_name:
-            if new_name in existing_users:
-                st.sidebar.warning("That user already exists. Switch to 'Existing user' to select it.")
-            else:
-                st.session_state.selected_user = new_name
-else:
-    new_name = st.sidebar.text_input("Enter your name", value="default")
-    st.session_state.selected_user = new_name if new_name else "default"
+        new_name = st.text_input("Enter your name", value="default")
+        st.session_state.selected_user = new_name if new_name else "default"
 
-username = st.session_state.selected_user
+    username = st.session_state.selected_user
 
-if username:
-    if "gym_bro" not in st.session_state or st.session_state.get("current_user") != username:
-        st.session_state.gym_bro = GymBro(username)
-        st.session_state.current_user = username
-        st.session_state.show_intro = True
-        st.session_state.current_exercises = []
-        st.session_state.chat_messages = []
-        # Initialize set data session state keys
-        for i in range(5):
-            if f"w_{i}" not in st.session_state:
-                st.session_state[f"w_{i}"] = 20.0
-            if f"r_{i}" not in st.session_state:
-                st.session_state[f"r_{i}"] = 10
-            if f"n_{i}" not in st.session_state:
-                st.session_state[f"n_{i}"] = ""
+    if username:
+        if "gym_bro" not in st.session_state or st.session_state.get("current_user") != username:
+            st.session_state.gym_bro = GymBro(username)
+            st.session_state.current_user = username
+            st.session_state.show_intro = True
+            st.session_state.current_exercises = []
+            st.session_state.chat_messages = []
+            for i in range(5):
+                if f"w_{i}" not in st.session_state:
+                    st.session_state[f"w_{i}"] = 20.0
+                if f"r_{i}" not in st.session_state:
+                    st.session_state[f"r_{i}"] = 10
+                if f"n_{i}" not in st.session_state:
+                    st.session_state[f"n_{i}"] = ""
 
-gym_bro = st.session_state.gym_bro
+    gym_bro = st.session_state.gym_bro if username else None
 
-# Sidebar quick stats (streaks, etc.)
-st.sidebar.markdown("---")
-if not gym_bro.profile:
-    st.sidebar.info("Set up your profile first!")
-else:
-    streak = gym_bro.get_streak_info()
-    col1, col2, col3 = st.sidebar.columns(3)
-    col1.metric("🔥 Streak", streak["current_streak"])
-    col2.metric("👑 Best", streak["longest_streak"])
-    col3.metric("📅 Week", f"{streak['weekly_consistency']}/7")
-st.sidebar.markdown("---")
+    if username and gym_bro:
+        st.markdown("---")
+        if not gym_bro.profile:
+            st.info("Set up your profile first!")
+        else:
+            streak = gym_bro.get_streak_info()
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown(f'<div class="streak-card"><h3>🔥 {streak["current_streak"]}</h3><small>Streak</small></div>', unsafe_allow_html=True)
+            with col2:
+                st.markdown(f'<div class="streak-card"><h3>👑 {streak["longest_streak"]}</h3><small>Best</small></div>', unsafe_allow_html=True)
+            with col3:
+                st.markdown(f'<div class="streak-card"><h3>📅 {streak["weekly_consistency"]}/7</h3><small>This Week</small></div>', unsafe_allow_html=True)
 
-# Delete user (unchanged)
-if "delete_mode" not in st.session_state:
-    st.session_state.delete_mode = False
-if not st.session_state.delete_mode:
-    if st.sidebar.button("🗑️ Delete this user"):
-        st.session_state.delete_mode = True
-        st.rerun()
-else:
-    st.sidebar.warning(f"Delete '{username}'? All data will be lost.")
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        if st.button("Yes, delete", type="primary"):
-            if delete_user_folder(username):
-                st.sidebar.success(f"User '{username}' deleted.")
-                if st.session_state.current_user == username:
-                    del st.session_state.gym_bro
-                    st.session_state.current_user = None
-                    st.session_state.selected_user = None
-                    st.session_state.current_exercises = []
-                    st.session_state.chat_messages = []
-                    st.session_state.show_intro = True
-                st.session_state.delete_mode = False
-                st.rerun()
-    with col2:
-        if st.button("Cancel"):
+        # Delete user
+        if "delete_mode" not in st.session_state:
             st.session_state.delete_mode = False
-            st.rerun()
+        if not st.session_state.delete_mode:
+            if st.button("🗑️ Delete this user"):
+                st.session_state.delete_mode = True
+                st.rerun()
+        else:
+            st.warning(f"Delete '{username}'? All data lost.")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Yes, delete"):
+                    if delete_user_folder(username):
+                        st.success("User deleted.")
+                        del st.session_state.gym_bro
+                        st.session_state.current_user = None
+                        st.session_state.selected_user = None
+                        st.session_state.current_exercises = []
+                        st.session_state.chat_messages = []
+                        st.session_state.show_intro = True
+                        st.session_state.delete_mode = False
+                        st.rerun()
+            with col2:
+                if st.button("Cancel"):
+                    st.session_state.delete_mode = False
+                    st.rerun()
+
+if not username or not gym_bro:
+    st.stop()
 
 # --- Main Content ---
 st.title("🏋️‍♂️ Gym Bro – Your AI Training Partner")
 
-# Profile setup wizard (if no profile yet)
+# Profile setup wizard
 if not gym_bro.profile:
     with st.form("profile_setup"):
         st.subheader("Let's get to know you, bro! 💪")
-        st.markdown("Help me build your perfect program.")
         col1, col2 = st.columns(2)
         with col1:
-            goals = st.multiselect("What are your main goals?", ["Build muscle", "Lose fat", "Get stronger", "Improve endurance", "Tone up", "General fitness"], default=["Build muscle"])
-            experience = st.selectbox("Experience level", ["Beginner", "Intermediate", "Advanced"])
-            days_per_week = st.slider("How many days can you train per week?", 2, 6, 4)
+            goals = st.multiselect("Main goals", ["Build muscle", "Lose fat", "Get stronger", "Improve endurance", "Tone up", "General fitness"], default=["Build muscle"])
+            experience = st.selectbox("Experience", ["Beginner", "Intermediate", "Advanced"])
+            days_per_week = st.slider("Days per week", 2, 6, 4)
         with col2:
-            focus_areas = st.multiselect("Any areas you want to focus on?", ["Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Overall"], default=["Overall"])
-            time_per_session = st.selectbox("How long can you train per session?", ["30 min", "45 min", "60 min", "75 min", "90 min"], index=2)
-        if st.form_submit_button("🚀 Create My Program", type="primary"):
+            focus_areas = st.multiselect("Focus areas", ["Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Overall"], default=["Overall"])
+            time_per_session = st.selectbox("Time per session", ["30 min", "45 min", "60 min", "75 min", "90 min"], index=2)
+        if st.form_submit_button("🚀 Create My Program"):
             gym_bro.setup_profile(goals, experience, days_per_week, focus_areas, time_per_session)
             gym_bro.generate_program()
             st.session_state.show_intro = False
             st.rerun()
     st.stop()
 
-# Intro screen after profile setup (first time)
+# Intro screen (first login after profile creation)
 if st.session_state.get("show_intro", False):
     with st.chat_message("assistant", avatar="💪"):
-        greetings = [
-            f"Yo {username}! Your program is ready! Let's crush those {', '.join(gym_bro.profile['goals'])} goals! 💪",
-            f"Brooo! Welcome, {username}. I've crafted a {gym_bro.profile['days_per_week']}-day split for you. Ready to dominate? 🔥",
-        ]
-        st.markdown(f"### {random.choice(greetings)}")
+        st.markdown(f"### Yo {username}! Your {gym_bro.profile['days_per_week']}-day split is ready. Let's crush it! 💪")
     if st.button("Let's Go! 🚀", use_container_width=True, type="primary"):
         st.session_state.show_intro = False
         st.rerun()
@@ -494,31 +587,23 @@ if st.session_state.get("show_intro", False):
 # Main tabs
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 Calendar", "💪 Log Workout", "📊 Progress", "🎯 My Program", "🤖 AI Chat"])
 
-# --- TAB 1: CALENDAR & STREAKS ---
+# ============================================
+# TAB 1: CALENDAR & STREAKS
+# ============================================
 with tab1:
     st.header("Your Training Calendar")
-    streak_info = gym_bro.get_streak_info()
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown(f'<div class="streak-card"><h3 style="margin:0">🔥 {streak_info["current_streak"]}</h3><small>Current Streak</small></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="streak-card"><h3 style="margin:0">👑 {streak_info["longest_streak"]}</h3><small>Longest Streak</small></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown(f'<div class="streak-card"><h3 style="margin:0">📅 {streak_info["weekly_consistency"]}/7</h3><small>This Week</small></div>', unsafe_allow_html=True)
-
-    st.markdown("---")
-    # Weekly calendar view
     today = date.today()
-    week_start = today - timedelta(days=today.weekday())  # Monday
+    week_start = today - timedelta(days=today.weekday())
+
+    # Mobile-friendly calendar: show as a scrollable row
     days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     cols = st.columns(7)
     workout_dates = {datetime.fromisoformat(w["date"]).date() for w in gym_bro.workouts}
-    # Determine planned days from program
     planned_days = set()
     if gym_bro.current_program:
         for d in gym_bro.current_program["days"]:
             day_name = d["day"]
-            day_idx = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].index(day_name)
+            day_idx = days_of_week.index(day_name[:3]) if day_name[:3] in days_of_week else 0
             planned_days.add(week_start + timedelta(days=day_idx))
 
     for i, col in enumerate(cols):
@@ -531,32 +616,34 @@ with tab1:
         elif is_planned and day >= today:
             class_name += " planned"
         with col:
-            st.markdown(f'<div class="{class_name}"><strong>{days_of_week[i]}</strong><br>{day.day}<br>{"✅" if is_trained else "📋" if is_planned and day >= today else ""}</div>', unsafe_allow_html=True)
-    st.caption("✅ = Trained   📋 = Planned")
+            st.markdown(f'<div class="{class_name}"><strong>{days_of_week[i]}</strong><span>{day.day}</span><br>{"✅" if is_trained else "📋" if is_planned and day >= today else ""}</div>', unsafe_allow_html=True)
 
-    # Today's session
+    st.caption("✅ Trained   📋 Planned")
     st.markdown("---")
-    st.subheader("Today's Planned Session")
+
+    # Today's planned session
+    st.subheader("Today's Session")
     if gym_bro.current_program:
         today_name = today.strftime("%A")
         today_program = next((d for d in gym_bro.current_program["days"] if d["day"] == today_name), None)
         if today_program:
             st.success(f"🎯 **{today_program['focus']}** day!")
             for ex in today_program["exercises"]:
-                st.write(f"• **{ex['name']}** – {ex['sets']}×{ex['reps']} {('('+ex['notes']+')') if ex.get('notes') else ''}")
+                st.write(f"• **{ex.get('name','')}** – {ex.get('sets','?')}×{ex.get('reps','?')} {('('+ex.get('notes','')+')') if ex.get('notes') else ''}")
             if st.button("Log This Workout", type="primary"):
-                # Pre-fill the workout tab
                 st.session_state.current_exercises = []
                 for ex in today_program["exercises"]:
-                    sets = [{"weight": 20.0, "reps": 10, "notes": ex.get('notes', '')} for _ in range(ex.get('sets', 3))]
+                    sets = [{"weight": 20.0, "reps": 10, "notes": ex.get('notes','')} for _ in range(ex.get('sets',3))]
                     st.session_state.current_exercises.append({"name": ex['name'], "sets": sets})
                 st.rerun()
         else:
-            st.info("Rest day or no workout planned. Enjoy the recovery, bro! 🛌")
+            st.info("Rest day or nothing planned. Enjoy the recovery, bro! 🛌")
     else:
-        st.info("No program generated yet. Go to 'My Program' tab to create one.")
+        st.info("No program yet. Generate one in My Program tab.")
 
-# --- TAB 2: LOG WORKOUT ---
+# ============================================
+# TAB 2: LOG WORKOUT
+# ============================================
 with tab2:
     st.header("Log Today's Workout")
     col1, col2, col3 = st.columns(3)
@@ -603,7 +690,7 @@ with tab2:
     sets_data.append({"weight": w0, "reps": r0, "notes": n0})
 
     if num_sets > 1:
-        if st.button("⬇️ Apply Set 1 values to all other sets", use_container_width=True):
+        if st.button("⬇️ Apply Set 1 to all", use_container_width=True):
             for i in range(1, num_sets):
                 st.session_state[f"w_{i}"] = w0
                 st.session_state[f"r_{i}"] = r0
@@ -613,7 +700,7 @@ with tab2:
     for i in range(1, num_sets):
         col1, col2, col3 = st.columns(3)
         with col1:
-            weight = st.number_input(f"Set {i+1} Weight (kg)", 0.0, 500.0, st.session_state[f"w_{i}"], key=f"w_{i}")
+            weight = st.number_input(f"Set {i+1} Weight", 0.0, 500.0, st.session_state[f"w_{i}"], key=f"w_{i}")
         with col2:
             reps = st.number_input(f"Set {i+1} Reps", 1, 30, st.session_state[f"r_{i}"], key=f"r_{i}")
         with col3:
@@ -660,12 +747,14 @@ with tab2:
                     for pr in result["new_prs"]:
                         st.markdown(f"- {pr['exercise']}: +{pr['improvement']}% ({pr['old_est_1rm']} → {pr['new_est_1rm']}kg)")
 
-# --- TAB 3: PROGRESS ---
+# ============================================
+# TAB 3: PROGRESS
+# ============================================
 with tab3:
     st.header("Your Progress")
     progress = gym_bro.get_progress()
     if not progress:
-        st.info("Log some exercises to see your numbers!")
+        st.info("Log some workouts to see progress!")
     else:
         for exercise, data in progress.items():
             with st.expander(f"📈 {exercise} ({data['sessions']} sessions)"):
@@ -686,7 +775,9 @@ with tab3:
             for a in gym_bro.achievements[-5:]:
                 st.write(f"- {a['exercise']}: +{a['improvement']}% on {a['date'][:10]}")
 
-# --- TAB 4: MY PROGRAM (safe display) ---
+# ============================================
+# TAB 4: MY PROGRAM
+# ============================================
 with tab4:
     st.header("Your Personalized Program")
     if not gym_bro.current_program:
@@ -711,7 +802,9 @@ with tab4:
             gym_bro.generate_program()
             st.rerun()
 
-# --- TAB 5: AI CHAT (UPDATED) ---
+# ============================================
+# TAB 5: AI CHAT
+# ============================================
 with tab5:
     st.header("💬 Chat with Gym Bro AI")
     if "chat_messages" not in st.session_state:
@@ -719,12 +812,11 @@ with tab5:
             {"role": "assistant", "content": f"Yo {username}! What's on your mind, bro? 💪"}
         ]
 
-    # Display chat history
-    for idx, msg in enumerate(st.session_state.chat_messages):
+    for msg in st.session_state.chat_messages:
         with st.chat_message(msg["role"], avatar="💪" if msg["role"]=="assistant" else None):
             st.write(msg["content"])
 
-    # Check if last assistant message contains a program JSON
+    # Detect program in last assistant message
     last_assistant_msg = None
     for msg in reversed(st.session_state.chat_messages):
         if msg["role"] == "assistant":
@@ -758,4 +850,4 @@ with tab5:
         st.rerun()
 
 st.markdown("---")
-st.caption(f"Gym Bro v4.1 | User: {username} | We go jim! 🏋️")
+st.caption(f"Gym Bro v5.0 | User: {username} | We go jim! 🏋️")
