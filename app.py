@@ -1,4 +1,4 @@
-# app.py - Gym Bro (Multi-User, AI Chat, Custom Exercises)
+# app.py - Gym Bro v2.0 (Multi-User, Custom Exercises, AI Chat)
 
 import streamlit as st
 import json
@@ -6,9 +6,9 @@ import random
 import os
 from datetime import datetime
 from typing import Dict, List
-import openai
+
 # ============================================
-# GYM BRO'S BRAIN (with AI)
+# GYM BRO CLASS
 # ============================================
 
 class GymBro:
@@ -80,7 +80,12 @@ class GymBro:
                         "new_est_1rm": round(current, 1),
                         "improvement": improvement
                     })
-                    self.achievements.append({"type":"PR", "exercise":name, "date":datetime.now().isoformat(), "improvement":improvement})
+                    self.achievements.append({
+                        "type": "PR",
+                        "exercise": name,
+                        "date": datetime.now().isoformat(),
+                        "improvement": improvement
+                    })
         self._save_json("achievements.json", self.achievements)
         return new_prs
 
@@ -142,16 +147,16 @@ class GymBro:
             if len(hist) >= 2 and hist[0]["estimated_1rm"] > 0:
                 first = hist[0]["estimated_1rm"]
                 last = hist[-1]["estimated_1rm"]
-                change = round((last - first)/first*100,1)
+                change = round((last - first)/first*100, 1)
                 summary[ex] = {
-                    "first_1rm": round(first,1),
-                    "current_1rm": round(last,1),
+                    "first_1rm": round(first, 1),
+                    "current_1rm": round(last, 1),
                     "change_percent": change,
                     "trend": "📈 Up" if change>0 else "📉 Down" if change<0 else "➡️ Same"
                 }
         return summary
 
-        def ai_chat(self, user_message, conversation_history):
+    def ai_chat(self, user_message, conversation_history):
         """Use OpenAI to respond like Gym Bro (openai>=1.0.0)"""
         from openai import OpenAI
         client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -174,7 +179,8 @@ Be encouraging but honest. Keep responses under 150 words."""
             )
             return response.choices[0].message.content
         except Exception as e:
-            return f"Bro, my brain's a bit foggy right now. Error: {str(e)}"  
+            return f"Bro, my brain's a bit foggy right now. Error: {str(e)}"
+
 # ============================================
 # STREAMLIT UI
 # ============================================
@@ -185,7 +191,6 @@ st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
 st.sidebar.title("👤 User")
 username = st.sidebar.text_input("Enter your name", value="default", key="username_input")
 if username:
-    # Initialize Gym Bro for this user
     if "gym_bro" not in st.session_state or st.session_state.get("current_user") != username:
         st.session_state.gym_bro = GymBro(username)
         st.session_state.current_user = username
@@ -195,7 +200,6 @@ if username:
 
 gym_bro = st.session_state.gym_bro
 
-# --- Sidebar: Quick Stats ---
 st.sidebar.markdown("---")
 st.sidebar.metric("Total Workouts", len(gym_bro.workouts))
 if gym_bro.achievements:
@@ -204,7 +208,6 @@ if gym_bro.achievements:
 # --- Main Content ---
 st.title("🏋️‍♂️ Gym Bro – Your AI Training Partner")
 
-# Intro screen (first time for new user)
 if st.session_state.get("show_intro", False):
     with st.chat_message("assistant", avatar="💪"):
         greetings = [
@@ -230,10 +233,8 @@ if st.session_state.get("show_intro", False):
                 - 👥 Multi-user support
                 """)
 else:
-    # Main tabs
     tab1, tab2, tab3, tab4 = st.tabs(["💪 Log Workout", "📊 Progress", "🎯 Next Session", "🤖 AI Chat"])
 
-    # TAB 1: WORKOUT LOGGING
     with tab1:
         st.header("Log Today's Workout")
         col1, col2, col3 = st.columns(3)
@@ -247,7 +248,6 @@ else:
         st.markdown("---")
         st.subheader("Add Exercise")
 
-        # Exercise input: choose from common or custom
         common_exercises = [
             "Barbell Squat", "Deadlift", "Bench Press", "Overhead Press",
             "Barbell Row", "Pull-ups", "Lat Pulldowns", "Dumbbell Press",
@@ -255,7 +255,6 @@ else:
             "Romanian Deadlift", "Face Pulls", "Planks", "Lunges",
             "Calf Raises", "Dips", "Push-ups"
         ]
-        # Add any custom exercises the user has previously created
         all_exercises = common_exercises + gym_bro.custom_exercises
         exercise_mode = st.radio("Select or type your own", ["📋 Choose from list", "✏️ Type custom"], horizontal=True)
         if exercise_mode.startswith("📋"):
@@ -281,13 +280,9 @@ else:
             sets_data.append({"weight": weight, "reps": reps, "notes": notes})
 
         if st.button("➕ Add to workout", use_container_width=True):
-            st.session_state.current_exercises.append({
-                "name": exercise_name,
-                "sets": sets_data
-            })
+            st.session_state.current_exercises.append({"name": exercise_name, "sets": sets_data})
             st.rerun()
 
-        # Display current exercises
         if st.session_state.current_exercises:
             st.markdown("---")
             st.subheader("Today's Exercises")
@@ -320,7 +315,6 @@ else:
                         for pr in result["new_prs"]:
                             st.markdown(f"- {pr['exercise']}: +{pr['improvement']}% ({pr['old_est_1rm']} → {pr['new_est_1rm']}kg)")
 
-    # TAB 2: PROGRESS
     with tab2:
         st.header("Your Progress")
         progress = gym_bro.get_progress()
@@ -333,7 +327,6 @@ else:
                     col1.metric("Start 1RM", f"{data['first_1rm']}kg")
                     col2.metric("Current 1RM", f"{data['current_1rm']}kg")
                     col3.metric("Change", f"{data['change_percent']}%", data['trend'])
-                    # Simple chart
                     if exercise in gym_bro.exercise_progress:
                         import plotly.graph_objects as go
                         hist = gym_bro.exercise_progress[exercise]
@@ -342,14 +335,12 @@ else:
                         fig = go.Figure(data=go.Scatter(x=dates, y=rms, mode='lines+markers'))
                         fig.update_layout(height=250, margin=dict(l=0,r=0,t=0,b=0))
                         st.plotly_chart(fig, use_container_width=True)
-
             if gym_bro.achievements:
                 st.markdown("---")
                 st.subheader("🏆 Achievements")
                 for a in gym_bro.achievements[-5:]:
                     st.write(f"- {a['exercise']}: +{a['improvement']}% on {a['date'][:10]}")
 
-    # TAB 3: NEXT SESSION
     with tab3:
         st.header("What's Next?")
         recommendation = gym_bro.get_next_session()
@@ -363,24 +354,19 @@ else:
             cols[2].caption(f"Reps: {ex['reps']}")
             cols[3].caption(f"💡 {ex['suggestion']}")
         if st.button("Start This Workout →"):
-            st.session_state.current_exercises = []  # reset
-            # switch to workout tab (requires javascript, but for now just go to tab1)
+            st.session_state.current_exercises = []
             st.rerun()
 
-    # TAB 4: AI CHAT
     with tab4:
         st.header("💬 Chat with Gym Bro AI")
         st.caption("Ask me anything about training, form, nutrition, or motivation!")
-
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = [
                 {"role": "assistant", "content": f"Yo {username}! What's on your mind, bro? 💪"}
             ]
-
         for msg in st.session_state.chat_messages:
             with st.chat_message(msg["role"], avatar="💪" if msg["role"]=="assistant" else None):
                 st.write(msg["content"])
-
         if prompt := st.chat_input("Ask Gym Bro..."):
             st.session_state.chat_messages.append({"role": "user", "content": prompt})
             with st.spinner("Gym Bro is thinking..."):
@@ -388,6 +374,5 @@ else:
             st.session_state.chat_messages.append({"role": "assistant", "content": reply})
             st.rerun()
 
-# Footer
 st.markdown("---")
 st.caption(f"Gym Bro v2.0 | User: {username} | We go jim! 🏋️")
