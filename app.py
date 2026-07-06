@@ -1,4 +1,4 @@
-# app.py - Gym Bro v2.0 (Multi-User, Custom Exercises, AI Chat)
+# app.py - Gym Bro v2.5 (User dropdown, Auto-fill, AI sees workouts, Better progress)
 
 import streamlit as st
 import json
@@ -140,46 +140,73 @@ class GymBro:
         }
 
     def get_progress(self):
+        """Return all exercises and their history, even if only one session."""
         if not self.exercise_progress:
             return None
         summary = {}
         for ex, hist in self.exercise_progress.items():
-            if len(hist) >= 2 and hist[0]["estimated_1rm"] > 0:
-                first = hist[0]["estimated_1rm"]
+            if len(hist) > 0:
                 last = hist[-1]["estimated_1rm"]
-                change = round((last - first)/first*100, 1)
+                first = hist[0]["estimated_1rm"] if len(hist) >= 2 else last
+                change = round((last - first)/first*100, 1) if first > 0 else 0
                 summary[ex] = {
                     "first_1rm": round(first, 1),
                     "current_1rm": round(last, 1),
+                    "sessions": len(hist),
                     "change_percent": change,
                     "trend": "📈 Up" if change>0 else "📉 Down" if change<0 else "➡️ Same"
                 }
         return summary
 
     def ai_chat(self, user_message, conversation_history):
-        """Use OpenAI to respond like Gym Bro (openai>=1.0.0)"""
-        from openai import OpenAI
-        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-        
-        system_prompt = """You are Gym Bro, a supportive and knowledgeable gym coach. 
+        """Use OpenAI (or fallback) – include last workout summary if available."""
+        last_workout_context = ""
+        if self.workouts:
+            last = self.workouts[-1]
+            exercises = [f"{ex['name']} ({len(ex['sets'])} sets)" for ex in last["exercises"]]
+            last_workout_context = (
+                f"User's last workout: {len(exercises)} exercises – {', '.join(exercises)}. "
+                f"Energy: {last['energy_level']}/10, Sleep: {last['sleep_quality']}/10, Duration: {last['duration_minutes']} min."
+            )
+
+        try:
+            from openai import OpenAI
+            if "OPENAI_API_KEY" in st.secrets:
+                client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                system_prompt = f"""You are Gym Bro, a supportive and knowledgeable gym coach. 
 You give advice on exercises, form, nutrition, motivation, and programming.
 Speak like a friendly bro: use 'bro', emojis, and hype.
-Be encouraging but honest. Keep responses under 150 words."""
-        
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(conversation_history[-6:])
-        messages.append({"role": "user", "content": user_message})
-        
-        try:
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=messages,
-                temperature=0.8,
-                max_tokens=200
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"Bro, my brain's a bit foggy right now. Error: {str(e)}"
+Be encouraging but honest. Keep responses under 150 words.
+{last_workout_context}"""
+                messages = [{"role": "system", "content": system_prompt}]
+                messages.extend(conversation_history[-6:])
+                messages.append({"role": "user", "content": user_message})
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=messages,
+                    temperature=0.8,
+                    max_tokens=200
+                )
+                return response.choices[0].message.content
+        except:
+            pass
+
+        # Offline fallback
+        msg = user_message.lower()
+        if any(word in msg for word in ["squat", "bench", "deadlift", "form"]):
+            return "Bro! Focus on form: keep your core tight, control the weight, and don't ego-lift. Slow and steady wins the gains! 🎯"
+        elif any(word in msg for word in ["eat", "nutrition", "food", "protein"]):
+            return "Eat big, eat clean! Protein is your best friend – aim for 1.6–2.2g per kg of bodyweight. Don't forget carbs for energy! 🍗🥗"
+        elif any(word in msg for word in ["motivation", "lazy", "tired"]):
+            return "Bro, even on days you don't feel like it – just show up. The hardest rep is walking through the door. You got this! 💪🔥"
+        elif any(word in msg for word in ["program", "routine", "split"]):
+            return "A solid PPL (Push/Pull/Legs) split is great for beginners. Train each muscle twice a week, 3–4 exercises per session, 3–4 sets of 8–12 reps. Consistency beats perfection! 🗓️"
+        elif any(word in msg for word in ["sore", "pain", "rest"]):
+            return "Soreness is normal, sharp pain isn't. Listen to your body, take an extra rest day if needed, and come back stronger. Recovery is part of training! 🛌"
+        elif any(word in msg for word in ["cardio", "running", "fat"]):
+            return "Cardio is great for heart health, but don't overdo it if you're trying to build muscle. 2–3 sessions of 20–30 min per week is plenty. Balance is key! 🏃"
+        else:
+            return f"Bro, I'm in offline mode. Ask me about form, nutrition, motivation, or programming – I've got you covered! 💪"
 
 # ============================================
 # STREAMLIT UI
@@ -187,9 +214,26 @@ Be encouraging but honest. Keep responses under 150 words."""
 
 st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
 
+# --- Helper: get list of existing users from user_data folder ---
+def get_existing_users():
+    if not os.path.exists("user_data"):
+        return []
+    return [d for d in os.listdir("user_data") if os.path.isdir(os.path.join("user_data", d))]
+
 # --- Sidebar: User Selection ---
 st.sidebar.title("👤 User")
-username = st.sidebar.text_input("Enter your name", value="default", key="username_input")
+existing_users = get_existing_users()
+if existing_users:
+    user_option = st.sidebar.radio("Select or new user", ["Existing user", "New user"])
+    if user_option == "Existing user":
+        username = st.sidebar.selectbox("Choose your profile", existing_users)
+    else:
+        username = st.sidebar.text_input("Enter new username", placeholder="e.g. IronWarrior")
+        if username and username in existing_users:
+            st.sidebar.warning("That user already exists. Switch to 'Existing user' to select it.")
+else:
+    username = st.sidebar.text_input("Enter your name", value="default", key="new_user_first")
+
 if username:
     if "gym_bro" not in st.session_state or st.session_state.get("current_user") != username:
         st.session_state.gym_bro = GymBro(username)
@@ -197,6 +241,8 @@ if username:
         st.session_state.show_intro = True
         st.session_state.current_exercises = []
         st.session_state.chat_messages = []
+        # Auto-fill memory: store last used weight/reps per set index for convenience
+        st.session_state.last_set_data = {}
 
 gym_bro = st.session_state.gym_bro
 
@@ -230,7 +276,7 @@ if st.session_state.get("show_intro", False):
                 - 📈 Track progress
                 - 🤖 AI chat for advice
                 - 🏆 Celebrate PRs
-                - 👥 Multi-user support
+                - 👥 Multi-user with auto‑fill
                 """)
 else:
     tab1, tab2, tab3, tab4 = st.tabs(["💪 Log Workout", "📊 Progress", "🎯 Next Session", "🤖 AI Chat"])
@@ -270,17 +316,28 @@ else:
         num_sets = st.selectbox("Number of sets", [1,2,3,4,5], index=2)
         sets_data = []
         for i in range(num_sets):
+            # Auto-fill from last set data if available
+            default_weight = st.session_state.last_set_data.get(f"weight_{i}", 20.0)
+            default_reps = st.session_state.last_set_data.get(f"reps_{i}", 10)
+            default_notes = st.session_state.last_set_data.get(f"notes_{i}", "")
+
             cols = st.columns(3)
             with cols[0]:
-                weight = st.number_input(f"Set {i+1} Weight (kg)", 0.0, 500.0, 20.0, key=f"w_{i}")
+                weight = st.number_input(f"Set {i+1} Weight (kg)", 0.0, 500.0, default_weight, key=f"w_{i}")
             with cols[1]:
-                reps = st.number_input(f"Set {i+1} Reps", 1, 30, 10, key=f"r_{i}")
+                reps = st.number_input(f"Set {i+1} Reps", 1, 30, default_reps, key=f"r_{i}")
             with cols[2]:
-                notes = st.text_input(f"Set {i+1} Notes", "", key=f"n_{i}")
+                notes = st.text_input(f"Set {i+1} Notes", default_notes, key=f"n_{i}")
             sets_data.append({"weight": weight, "reps": reps, "notes": notes})
+            # Store current values for next time (but only if they changed? We'll store anyway)
+            st.session_state.last_set_data[f"weight_{i}"] = weight
+            st.session_state.last_set_data[f"reps_{i}"] = reps
+            st.session_state.last_set_data[f"notes_{i}"] = notes
 
         if st.button("➕ Add to workout", use_container_width=True):
             st.session_state.current_exercises.append({"name": exercise_name, "sets": sets_data})
+            # Clear the auto-fill memory so next exercise starts fresh (optional)
+            st.session_state.last_set_data = {}
             st.rerun()
 
         if st.session_state.current_exercises:
@@ -319,13 +376,13 @@ else:
         st.header("Your Progress")
         progress = gym_bro.get_progress()
         if not progress:
-            st.info("Log some workouts to see progress!")
+            st.info("Log some exercises to see your numbers! (They'll appear here once you've added a workout.)")
         else:
             for exercise, data in progress.items():
-                with st.expander(f"📈 {exercise}"):
+                with st.expander(f"📈 {exercise} ({data['sessions']} sessions)"):
                     col1,col2,col3 = st.columns(3)
-                    col1.metric("Start 1RM", f"{data['first_1rm']}kg")
-                    col2.metric("Current 1RM", f"{data['current_1rm']}kg")
+                    col1.metric("Best 1RM", f"{data['current_1rm']}kg")
+                    col2.metric("First 1RM", f"{data['first_1rm']}kg")
                     col3.metric("Change", f"{data['change_percent']}%", data['trend'])
                     if exercise in gym_bro.exercise_progress:
                         import plotly.graph_objects as go
@@ -359,7 +416,7 @@ else:
 
     with tab4:
         st.header("💬 Chat with Gym Bro AI")
-        st.caption("Ask me anything about training, form, nutrition, or motivation!")
+        st.caption("Ask me anything about training, form, nutrition, or motivation! (I can see your last workout 😉)")
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = [
                 {"role": "assistant", "content": f"Yo {username}! What's on your mind, bro? 💪"}
@@ -375,4 +432,4 @@ else:
             st.rerun()
 
 st.markdown("---")
-st.caption(f"Gym Bro v2.0 | User: {username} | We go jim! 🏋️")
+st.caption(f"Gym Bro v2.5 | User: {username} | We go jim! 🏋️")
