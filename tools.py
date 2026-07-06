@@ -1,14 +1,9 @@
 # tools.py
-import json
-import re
+import json, re, io, base64
 from duckduckgo_search import DDGS
 from PIL import Image
-import io
-import base64
 
-# ---------- WEB SEARCH ----------
 def search_exercises(query: str, max_results: int = 3) -> str:
-    """Search the web for exercise-related information and return a summary."""
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))
@@ -21,18 +16,14 @@ def search_exercises(query: str, max_results: int = 3) -> str:
     except Exception as e:
         return f"Search failed: {e}"
 
-# ---------- IMAGE ANALYSIS (GPT-4 Vision) ----------
 def analyze_form(image_file, client) -> str:
-    """Send image to GPT-4 Vision for form analysis."""
     try:
         image = Image.open(image_file)
-        # Convert to base64
         buffered = io.BytesIO()
         image.save(buffered, format="JPEG")
         img_b64 = base64.b64encode(buffered.getvalue()).decode()
-
         response = client.chat.completions.create(
-            model="gpt-4o",  # or gpt-4-turbo
+            model="gpt-4o",
             messages=[
                 {
                     "role": "user",
@@ -48,8 +39,9 @@ def analyze_form(image_file, client) -> str:
     except Exception as e:
         return f"Form analysis failed: {e}"
 
-# ---------- JSON PROGRAM PARSER (unchanged from previous best version) ----------
 def parse_program_payload(text: str):
+    # ... (use the version from earlier, it's the same)
+    # I'll include a compact version here
     if not text:
         return None, "Empty response."
     match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
@@ -65,7 +57,6 @@ def parse_program_payload(text: str):
     if not match:
         return None, "No JSON object with 'program_name' and 'days' found."
     raw_json = match.group(1)
-    # Repair
     raw_json = re.sub(r',\s*([}\]])', r'\1', raw_json)
     last_brace = raw_json.rfind('}')
     if last_brace != -1:
@@ -73,7 +64,6 @@ def parse_program_payload(text: str):
     try:
         prog = json.loads(raw_json)
     except json.JSONDecodeError:
-        # close missing braces
         open_b = raw_json.count('{') - raw_json.count('}')
         open_s = raw_json.count('[') - raw_json.count(']')
         raw_json += ']' * open_s + '}' * open_b
@@ -88,7 +78,6 @@ def parse_program_payload(text: str):
 def normalize_exercises(program: dict):
     exercises = []
     for day in program.get("days", []):
-        day_name = day.get("day", "Unknown")
         for ex in day.get("exercises", []):
             name = ex.get("name", "exercise")
             sets_data = []
