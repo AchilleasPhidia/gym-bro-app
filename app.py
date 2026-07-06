@@ -1,4 +1,4 @@
-# app.py - Gym Bro v5.1 (AI obeys program commands, better JSON detection, beautiful UI)
+# app.py - Gym Bro v5.2 (Ultimate AI control, robust JSON, beautiful UI)
 
 import streamlit as st
 import json
@@ -88,7 +88,7 @@ Respond ONLY with valid JSON. Structure:
         except:
             pass
 
-        # Offline fallback
+        # Offline fallback program
         days_map = {2: ["Monday", "Thursday"], 3: ["Monday", "Wednesday", "Friday"],
                     4: ["Monday", "Tuesday", "Thursday", "Friday"],
                     5: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]}
@@ -253,6 +253,8 @@ Respond ONLY with valid JSON. Structure:
                 days_desc.append(f"{day}: {focus} ({', '.join(ex_names)})")
             program_context = "Current program: " + "; ".join(days_desc) + ". "
 
+        # Build the list of messages for the API call
+        messages = []
         try:
             from openai import OpenAI
             if "OPENAI_API_KEY" in st.secrets:
@@ -263,50 +265,50 @@ Respond ONLY with valid JSON. Structure:
                     f"{last_workout_context}\n"
                     f"{program_context}\n"
                     "CRITICAL RULE: If the user asks you to CREATE, UPDATE, MODIFY, ADD, REMOVE, or CHANGE their workout program in any way, "
-                    "you MUST respond ONLY with a valid JSON object inside a code block. The JSON must have this structure:\n"
-                    "```json\n"
+                    "you MUST respond ONLY with a raw JSON object (no code fences, no markdown, no other text). "
+                    "The JSON must have exactly this structure:\n"
                     "{\n"
                     '  "program_name": "string",\n'
                     '  "days": [\n'
                     '    {"day": "Monday", "focus": "...", "exercises": [{"name": "...", "sets": 3, "reps": "8-10", "notes": "..."}]}\n'
                     "  ]\n"
                     "}\n"
-                    "```\n"
-                    "Include ALL days, even unchanged ones. Do NOT add any other text, explanations, or greetings – ONLY the JSON block.\n"
+                    "Include ALL days, even unchanged ones. Output ONLY the JSON object.\n"
                     "If the user is NOT asking about program changes, reply normally like a helpful bro coach."
                 )
                 messages = [{"role": "system", "content": system_prompt}]
                 messages.extend(conversation_history[-6:])
                 messages.append({"role": "user", "content": user_message})
+
                 response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=messages,
                     temperature=0.8,
-                    max_tokens=500
+                    max_tokens=800  # allow more tokens for program generation
                 )
                 return response.choices[0].message.content
         except:
             pass
 
-        # Offline fallback
+        # Offline fallback – rule-based responses
         msg = user_message.lower()
-        if any(word in msg for word in ["squat", "bench", "deadlift", "form"]):
+        if any(word in msg for word in ["program", "routine", "split", "plan", "update", "change", "modify", "add", "remove", "create"]):
+            return '{\n  "program_name": "Your Custom Plan",\n  "days": [\n    {"day": "Monday", "focus": "Full Body", "exercises": [{"name": "Squats", "sets": 3, "reps": "8-10", "notes": ""}]},\n    {"day": "Wednesday", "focus": "Full Body", "exercises": [{"name": "Bench Press", "sets": 3, "reps": "8-10", "notes": ""}]},\n    {"day": "Friday", "focus": "Full Body", "exercises": [{"name": "Deadlift", "sets": 3, "reps": "6-8", "notes": ""}]}\n  ]\n}'
+        elif any(word in msg for word in ["squat", "bench", "deadlift", "form"]):
             return "Bro! Focus on form: keep your core tight, control the weight, and don't ego-lift. 🎯"
         elif any(word in msg for word in ["eat", "nutrition", "food", "protein"]):
             return "Eat big, eat clean! Protein is your best friend – aim for 1.6–2.2g per kg of bodyweight. 🍗🥗"
         elif any(word in msg for word in ["motivation", "lazy", "tired"]):
             return "Bro, even on days you don't feel like it – just show up. The hardest rep is walking through the door. 💪🔥"
-        elif any(word in msg for word in ["program", "routine", "split"]):
-            return "A solid PPL split is great. Train each muscle twice a week, 3–4 sets of 8–12 reps. 🗓️"
         elif any(word in msg for word in ["sore", "pain", "rest"]):
             return "Soreness is normal, sharp pain isn't. Take an extra rest day if needed. 🛌"
         elif any(word in msg for word in ["cardio", "running", "fat"]):
             return "Cardio is great, but don't overdo it if you're building muscle. 2–3 sessions of 20–30 min per week. 🏃"
         else:
-            return f"Bro, I'm in offline mode. Ask me about form, nutrition, motivation, or programming. 💪"
+            return "Bro, I'm here to help. Ask me about workouts, form, nutrition, or your program!"
 
 # ============================================
-# STREAMLIT UI v5.1 – Beautiful & Mobile-First
+# STREAMLIT UI v5.2 – Beautiful & Mobile-First
 # ============================================
 
 st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
@@ -320,18 +322,15 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
 
-    /* Main container spacing */
     .main .block-container {
         padding: 1rem 0.5rem;
     }
 
-    /* Headers */
     h1, h2, h3 {
         font-weight: 700;
         letter-spacing: -0.5px;
     }
 
-    /* Buttons */
     .stButton > button {
         border-radius: 14px;
         background: linear-gradient(135deg, #FF4B4B, #FF6B6B);
@@ -349,14 +348,12 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(255,75,75,0.3);
     }
 
-    /* Secondary buttons */
     .secondary-btn button {
         background: #2d2d2d !important;
         border: 1px solid #444 !important;
         color: #ddd !important;
     }
 
-    /* Cards */
     .streak-card {
         background: linear-gradient(145deg, #1e1e1e, #2a2a2a);
         border-radius: 18px;
@@ -375,13 +372,6 @@ st.markdown("""
         font-size: 0.8rem;
     }
 
-    /* Calendar */
-    .calendar-grid {
-        display: flex;
-        justify-content: space-around;
-        flex-wrap: wrap;
-        gap: 4px;
-    }
     .calendar-day {
         background: #1e1e1e;
         border-radius: 14px;
@@ -410,7 +400,6 @@ st.markdown("""
         font-weight: 600;
     }
 
-    /* Expanders */
     .streamlit-expanderHeader {
         font-weight: 600;
         font-size: 1rem;
@@ -419,7 +408,6 @@ st.markdown("""
         border: 1px solid #333;
     }
 
-    /* Chat messages */
     .stChatMessage {
         border-radius: 16px;
         padding: 0.8rem;
@@ -427,7 +415,6 @@ st.markdown("""
         background: #1a1a1a;
     }
 
-    /* Mobile adjustments */
     @media (max-width: 768px) {
         .main .block-container {
             padding: 0.5rem 0.2rem;
@@ -802,7 +789,7 @@ with tab4:
             st.rerun()
 
 # ============================================
-# TAB 5: AI CHAT
+# TAB 5: AI CHAT (Enhanced)
 # ============================================
 with tab5:
     st.header("💬 Chat with Gym Bro AI")
@@ -811,11 +798,12 @@ with tab5:
             {"role": "assistant", "content": f"Yo {username}! What's on your mind, bro? 💪"}
         ]
 
+    # Display chat history
     for msg in st.session_state.chat_messages:
         with st.chat_message(msg["role"], avatar="💪" if msg["role"]=="assistant" else None):
             st.write(msg["content"])
 
-    # Robust program detection from last assistant message
+    # Robust program detection from the last assistant message
     last_assistant_msg = None
     for msg in reversed(st.session_state.chat_messages):
         if msg["role"] == "assistant":
@@ -824,11 +812,25 @@ with tab5:
 
     program_json = None
     if last_assistant_msg:
-        # Try to find a JSON code block (with or without language specifier)
+        # Show raw response in an expander for debugging (can be removed later)
+        with st.expander("🔍 Debug: Last AI response"):
+            st.code(last_assistant_msg)
+
+        # Try multiple strategies to extract a valid program JSON
+        # 1. Look for a code block with or without language specifier
         match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', last_assistant_msg, re.DOTALL)
         if not match:
-            # Maybe the AI just put raw JSON without code block? Look for a JSON object with program_name
-            match = re.search(r'(\{.*?"program_name".*?\})', last_assistant_msg, re.DOTALL)
+            # 2. Look for a plain JSON object that contains "program_name"
+            match = re.search(r'(\{[^{}]*"program_name"[^{}]*\})', last_assistant_msg, re.DOTALL)
+            if not match:
+                # 3. Try to find the first { and last } and hope it's complete
+                first_brace = last_assistant_msg.find('{')
+                last_brace = last_assistant_msg.rfind('}')
+                if first_brace != -1 and last_brace > first_brace:
+                    candidate = last_assistant_msg[first_brace:last_brace+1]
+                    if '"program_name"' in candidate and '"days"' in candidate:
+                        match = re.search(r'(\{.*\})', candidate, re.DOTALL)
+
         if match:
             try:
                 candidate = match.group(1)
@@ -840,12 +842,17 @@ with tab5:
 
     if program_json:
         st.markdown("---")
-        st.success("I see a program in my last message! Want to apply it?")
-        if st.button("✅ Apply This Program to My Calendar", type="primary"):
+        st.success("✅ I see a valid program! Click below to apply it to your calendar.")
+        if st.button("📅 Apply This Program to My Calendar", type="primary", use_container_width=True):
             gym_bro.current_program = program_json
             gym_bro._save_json("current_program.json", program_json)
             st.rerun()
+    else:
+        # If the last message seems program-related but no valid JSON was found, give a hint
+        if last_assistant_msg and any(word in last_assistant_msg.lower() for word in ["program", "workout", "day", "exercise"]):
+            st.info("💡 If the AI gave you a program but the Apply button isn't showing, the JSON might be malformed. Check the Debug box above. Try asking: 'Give me the program as a clean JSON object.'")
 
+    # Chat input
     if prompt := st.chat_input("Ask Gym Bro..."):
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         with st.spinner("Gym Bro is thinking..."):
@@ -854,4 +861,4 @@ with tab5:
         st.rerun()
 
 st.markdown("---")
-st.caption(f"Gym Bro v5.1 | User: {username} | We go jim! 🏋️")
+st.caption(f"Gym Bro v5.2 | User: {username} | We go jim! 🏋️")
