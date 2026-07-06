@@ -1,4 +1,4 @@
 streamlit
 plotly
 numpy
-openai
+openai>=1.0.0

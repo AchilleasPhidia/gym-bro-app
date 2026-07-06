@@ -7,7 +7,6 @@ import os
 from datetime import datetime
 from typing import Dict, List
 import openai
-
 # ============================================
 # GYM BRO'S BRAIN (with AI)
 # ============================================
@@ -152,9 +151,10 @@ class GymBro:
                 }
         return summary
 
-    def ai_chat(self, user_message, conversation_history):
-        """Use OpenAI to respond like Gym Bro"""
-        openai.api_key = st.secrets["OPENAI_API_KEY"]
+        def ai_chat(self, user_message, conversation_history):
+        """Use OpenAI to respond like Gym Bro (openai>=1.0.0)"""
+        from openai import OpenAI
+        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
         
         system_prompt = """You are Gym Bro, a supportive and knowledgeable gym coach. 
 You give advice on exercises, form, nutrition, motivation, and programming.
@@ -162,11 +162,11 @@ Speak like a friendly bro: use 'bro', emojis, and hype.
 Be encouraging but honest. Keep responses under 150 words."""
         
         messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(conversation_history[-6:])  # last 6 messages for context
+        messages.extend(conversation_history[-6:])
         messages.append({"role": "user", "content": user_message})
         
         try:
-            response = openai.ChatCompletion.create(
+            response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=messages,
                 temperature=0.8,
@@ -175,7 +175,6 @@ Be encouraging but honest. Keep responses under 150 words."""
             return response.choices[0].message.content
         except Exception as e:
             return f"Bro, my brain's a bit foggy right now. Error: {str(e)}"
-
 # ============================================
 # STREAMLIT UI
 # ============================================
