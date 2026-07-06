@@ -1,9 +1,10 @@
-# app.py - Gym Bro v2.5 (User dropdown, Auto-fill, AI sees workouts, Better progress)
+# app.py - Gym Bro v3.0 (Auto-fill weights, Delete users, Better UI)
 
 import streamlit as st
 import json
 import random
 import os
+import shutil
 from datetime import datetime
 from typing import Dict, List
 
@@ -140,7 +141,7 @@ class GymBro:
         }
 
     def get_progress(self):
-        """Return all exercises and their history, even if only one session."""
+        """Return all exercises and their history."""
         if not self.exercise_progress:
             return None
         summary = {}
@@ -214,35 +215,54 @@ Be encouraging but honest. Keep responses under 150 words.
 
 st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
 
-# --- Helper: get list of existing users from user_data folder ---
+# --- Helper functions ---
 def get_existing_users():
     if not os.path.exists("user_data"):
         return []
-    return [d for d in os.listdir("user_data") if os.path.isdir(os.path.join("user_data", d))]
+    return sorted([d for d in os.listdir("user_data") if os.path.isdir(os.path.join("user_data", d))])
 
-# --- Sidebar: User Selection ---
+def delete_user_folder(username):
+    folder = os.path.join("user_data", username)
+    if os.path.exists(folder):
+        shutil.rmtree(folder)
+        return True
+    return False
+
+# --- Sidebar: User Management ---
 st.sidebar.title("👤 User")
 existing_users = get_existing_users()
+
+if "selected_user" not in st.session_state:
+    st.session_state.selected_user = None
+
+# Decide how to show user selection
 if existing_users:
     user_option = st.sidebar.radio("Select or new user", ["Existing user", "New user"])
     if user_option == "Existing user":
-        username = st.sidebar.selectbox("Choose your profile", existing_users)
+        selected = st.sidebar.selectbox("Choose your profile", existing_users)
+        st.session_state.selected_user = selected
     else:
-        username = st.sidebar.text_input("Enter new username", placeholder="e.g. IronWarrior")
-        if username and username in existing_users:
-            st.sidebar.warning("That user already exists. Switch to 'Existing user' to select it.")
+        new_name = st.sidebar.text_input("Enter new username", placeholder="e.g. IronWarrior")
+        if new_name:
+            if new_name in existing_users:
+                st.sidebar.warning("That user already exists. Switch to 'Existing user' to select it.")
+            else:
+                st.session_state.selected_user = new_name
 else:
-    username = st.sidebar.text_input("Enter your name", value="default", key="new_user_first")
+    new_name = st.sidebar.text_input("Enter your name", value="default")
+    st.session_state.selected_user = new_name if new_name else "default"
+
+username = st.session_state.selected_user
 
 if username:
+    # Initialize Gym Bro for this user
     if "gym_bro" not in st.session_state or st.session_state.get("current_user") != username:
         st.session_state.gym_bro = GymBro(username)
         st.session_state.current_user = username
         st.session_state.show_intro = True
         st.session_state.current_exercises = []
         st.session_state.chat_messages = []
-        # Auto-fill memory: store last used weight/reps per set index for convenience
-        st.session_state.last_set_data = {}
+        # Auto-fill memory: we'll rely on Streamlit's built-in widget state, so nothing extra needed
 
 gym_bro = st.session_state.gym_bro
 
@@ -250,6 +270,25 @@ st.sidebar.markdown("---")
 st.sidebar.metric("Total Workouts", len(gym_bro.workouts))
 if gym_bro.achievements:
     st.sidebar.write(f"🏆 {len(gym_bro.achievements)} Achievements")
+
+# --- Delete user button (danger zone) ---
+st.sidebar.markdown("---")
+if st.sidebar.button("🗑️ Delete this user", help="Permanently delete all data for this user"):
+    confirm = st.sidebar.checkbox("I'm sure. Delete all data.")
+    if confirm:
+        if delete_user_folder(username):
+            st.sidebar.success(f"User '{username}' deleted.")
+            # Clear session state for this user
+            if st.session_state.current_user == username:
+                del st.session_state.gym_bro
+                st.session_state.current_user = None
+                st.session_state.selected_user = None
+                st.session_state.current_exercises = []
+                st.session_state.chat_messages = []
+                st.session_state.show_intro = True
+            st.rerun()
+        else:
+            st.sidebar.error("Could not delete user.")
 
 # --- Main Content ---
 st.title("🏋️‍♂️ Gym Bro – Your AI Training Partner")
@@ -316,10 +355,10 @@ else:
         num_sets = st.selectbox("Number of sets", [1,2,3,4,5], index=2)
         sets_data = []
         for i in range(num_sets):
-            # Auto-fill from last set data if available
-            default_weight = st.session_state.last_set_data.get(f"weight_{i}", 20.0)
-            default_reps = st.session_state.last_set_data.get(f"reps_{i}", 10)
-            default_notes = st.session_state.last_set_data.get(f"notes_{i}", "")
+            # Auto-fill: use session state value if it exists, otherwise default to 20.0/10
+            default_weight = st.session_state.get(f"w_{i}", 20.0)
+            default_reps = st.session_state.get(f"r_{i}", 10)
+            default_notes = st.session_state.get(f"n_{i}", "")
 
             cols = st.columns(3)
             with cols[0]:
@@ -329,15 +368,10 @@ else:
             with cols[2]:
                 notes = st.text_input(f"Set {i+1} Notes", default_notes, key=f"n_{i}")
             sets_data.append({"weight": weight, "reps": reps, "notes": notes})
-            # Store current values for next time (but only if they changed? We'll store anyway)
-            st.session_state.last_set_data[f"weight_{i}"] = weight
-            st.session_state.last_set_data[f"reps_{i}"] = reps
-            st.session_state.last_set_data[f"notes_{i}"] = notes
 
         if st.button("➕ Add to workout", use_container_width=True):
             st.session_state.current_exercises.append({"name": exercise_name, "sets": sets_data})
-            # Clear the auto-fill memory so next exercise starts fresh (optional)
-            st.session_state.last_set_data = {}
+            # We do NOT reset the set keys – they'll stay and auto-fill the next exercise
             st.rerun()
 
         if st.session_state.current_exercises:
@@ -432,4 +466,4 @@ else:
             st.rerun()
 
 st.markdown("---")
-st.caption(f"Gym Bro v2.5 | User: {username} | We go jim! 🏋️")
+st.caption(f"Gym Bro v3.0 | User: {username} | We go jim! 🏋️")
