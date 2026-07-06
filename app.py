@@ -1,4 +1,4 @@
-# app.py – Gym Bro v7.1 (All tabs, AI‑controlled, robust error handling)
+# app.py – Gym Bro v7.2 (Fixed unclosed string in function calls)
 
 import streamlit as st
 import json
@@ -52,7 +52,6 @@ class GymBro:
         self._save_json("profile.json", self.profile)
 
     def generate_program(self):
-        """Offline fallback program generator."""
         if not self.profile:
             return None
         days_map = {2: ["Monday", "Thursday"], 3: ["Monday", "Wednesday", "Friday"],
@@ -198,7 +197,7 @@ class GymBro:
 
 st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
 
-# Custom CSS (same beautiful theme)
+# Custom CSS (same as before)
 st.markdown("""
 <style>
     :root {
@@ -583,7 +582,7 @@ with tab4:
             gym_bro.generate_program()
             st.rerun()
 
-# --- TAB 5: AI CHAT (function calling with error handling) ---
+# --- TAB 5: AI CHAT (improved function call handling) ---
 with tab5:
     st.header("💬 Chat with Gym Bro AI")
     if "chat_messages" not in st.session_state:
@@ -592,26 +591,25 @@ with tab5:
         with st.chat_message(msg["role"], avatar="💪" if msg["role"]=="assistant" else None):
             st.markdown(msg["content"])
 
-    # Define functions the AI can call
     functions = [
         {
             "name": "create_program",
-            "description": "Create or update the user's workout program. Provide complete JSON.",
+            "description": "Create or update the user's workout program. Provide the complete program as a JSON string. Make sure all strings are properly escaped.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "program_json": {"type": "string", "description": "Full program JSON string"}
+                    "program_json": {"type": "string", "description": "Full program JSON string with escaped quotes"}
                 },
                 "required": ["program_json"]
             }
         },
         {
             "name": "log_todays_workout",
-            "description": "Log a completed workout for the current day.",
+            "description": "Log a completed workout for the current day. Provide a JSON list of exercises (with sets, reps, weights, notes).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "exercises": {"type": "string", "description": "JSON list of exercises with sets, reps, weights, notes"}
+                    "exercises": {"type": "string", "description": "JSON list of exercises as a string, e.g. '[{\"name\":\"Squat\",\"sets\":[{\"weight\":100,\"reps\":5}]}]'"}
                 },
                 "required": ["exercises"]
             }
@@ -634,7 +632,11 @@ with tab5:
         with st.spinner("Gym Bro is thinking..."):
             try:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                system_context = f"You are Gym Bro, a helpful gym coach. User: {username}. "
+                system_context = (
+                    "You are Gym Bro, a helpful gym coach. "
+                    "When returning JSON strings, always escape double quotes with backslashes, like \\\"name\\\". "
+                    f"User: {username}. "
+                )
                 if gym_bro.current_program:
                     system_context += f"Current program: {json.dumps(gym_bro.current_program)}. "
                 messages = [{"role": "system", "content": system_context}]
@@ -650,30 +652,47 @@ with tab5:
                 reply_msg = response.choices[0].message
                 if reply_msg.function_call:
                     func_name = reply_msg.function_call.name
-                    args = json.loads(reply_msg.function_call.arguments)
-                    if func_name == "create_program":
-                        prog, err = parse_program_payload(args["program_json"])
-                        if prog:
-                            gym_bro.current_program = prog
-                            gym_bro._save_json("current_program.json", prog)
-                            reply = "✅ Program updated! Check your calendar."
-                        else:
-                            reply = f"Couldn't update program: {err}"
-                    elif func_name == "log_todays_workout":
+                    raw_args = reply_msg.function_call.arguments
+                    try:
+                        args = json.loads(raw_args)
+                    except json.JSONDecodeError:
+                        # Attempt to repair by escaping unescaped quotes inside strings
+                        # Simple fix: replace " with \" inside the string value if it looks like it's part of a JSON string
+                        repaired = re.sub(r'(?<!\\)"', r'\\"', raw_args)
                         try:
-                            exercises = json.loads(args["exercises"])
-                            if not isinstance(exercises, list):
-                                raise ValueError("Exercises must be a list")
-                            result = gym_bro.log_workout(exercises, 7, 7, 60)
-                            reply = f"Workout logged! {result['feedback']}"
-                        except Exception as e:
-                            reply = f"Couldn't log workout: {e}"
-                    elif func_name == "search_web":
-                        results = search_exercises(args["query"])
-                        reply = f"Search results:\n{results}"
+                            args = json.loads(repaired)
+                        except:
+                            st.session_state.chat_messages.append({"role": "assistant", "content": f"Error: Could not parse function arguments. Raw: {raw_args}"})
+                            st.rerun()
+                            # continue?
+                            args = None  # to skip processing
+
+                    if args:
+                        if func_name == "create_program":
+                            prog, err = parse_program_payload(args["program_json"])
+                            if prog:
+                                gym_bro.current_program = prog
+                                gym_bro._save_json("current_program.json", prog)
+                                reply = "✅ Program updated! Check your calendar."
+                            else:
+                                reply = f"Couldn't update program: {err}"
+                        elif func_name == "log_todays_workout":
+                            try:
+                                exercises = json.loads(args["exercises"])
+                                if not isinstance(exercises, list):
+                                    raise ValueError("Exercises must be a list")
+                                result = gym_bro.log_workout(exercises, 7, 7, 60)
+                                reply = f"Workout logged! {result['feedback']}"
+                            except Exception as e:
+                                reply = f"Couldn't log workout: {e}"
+                        elif func_name == "search_web":
+                            results = search_exercises(args["query"])
+                            reply = f"Search results:\n{results}"
+                        else:
+                            reply = "Function not implemented."
+                        st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                     else:
-                        reply = "Function not implemented."
-                    st.session_state.chat_messages.append({"role": "assistant", "content": reply})
+                        st.session_state.chat_messages.append({"role": "assistant", "content": "Error: Could not parse function arguments."})
                 else:
                     st.session_state.chat_messages.append({"role": "assistant", "content": reply_msg.content})
             except Exception as e:
@@ -696,4 +715,4 @@ with tab6:
                     st.error(f"Form analysis failed: {e}")
 
 st.markdown("---")
-st.caption(f"Gym Bro v7.1 | User: {username} | We go jim! 🏋️")
+st.caption(f"Gym Bro v7.2 | User: {username} | We go jim! 🏋️")
