@@ -174,7 +174,7 @@ Be encouraging but honest. Keep responses under 150 words."""
             )
             return response.choices[0].message.content
         except Exception as e:
-            return f"Bro, my brain's a bit foggy right now. Error: {str(e)}"
+            return f"Bro, my brain's a bit foggy right now. Error: {str(e)}"  
 # ============================================
 # STREAMLIT UI
 # ============================================
