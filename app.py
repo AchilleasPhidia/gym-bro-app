@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Light theme fixed, sticky nav that follows, ultra‑smart AI)
+# app.py – Gym Bro X (Futuristic UI, fixed nav, ultra‑smart AI)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -283,45 +283,52 @@ st.set_page_config(page_title="Gym Bro X", page_icon="💎", layout="wide")
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
 
-# Apply theme CSS
+# Apply futuristic theme CSS
 if st.session_state.theme == "dark":
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Outfit', sans-serif; color: #f5f7fb; }
-    .main { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); }
+    html, body, [class*="css"] { font-family: 'Outfit', sans-serif; color: #f0f0f0; }
+    .main { background: radial-gradient(circle at 20% 20%, #1a1a2e, #0f0c29); }
     .stApp { background: transparent; }
     [data-testid="stSidebar"] {
-        background: rgba(15,12,41,0.8); backdrop-filter: blur(20px);
-        border-right: 1px solid rgba(255,255,255,0.1);
+        background: rgba(15,12,41,0.8); backdrop-filter: blur(25px);
+        border-right: 1px solid rgba(255,107,53,0.3);
     }
-    /* Sticky nav inside the main container */
-    .sticky-nav {
-        position: sticky; top: 0; z-index: 999;
-        background: linear-gradient(90deg, #1a1a40, #2d2d6b);
-        padding: 0.6rem 0; border-bottom: 2px solid #ff6b35;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        border-radius: 0 0 20px 20px;
-        margin-bottom: 1rem;
+    /* Fixed navigation bar */
+    .fixed-nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+        background: rgba(20,20,50,0.85); backdrop-filter: blur(20px);
+        padding: 0.5rem 0; border-bottom: 2px solid #ff6b35;
+        box-shadow: 0 0 30px rgba(255,107,53,0.3);
+        border-radius: 0 0 24px 24px;
     }
-    .sticky-nav button { font-weight: 600; letter-spacing: 0.5px; color: #f5f7fb; }
+    .fixed-nav button {
+        font-weight: 600; letter-spacing: 0.5px;
+        background: transparent; color: #f0f0f0; border: 1px solid rgba(255,107,53,0.5);
+    }
+    .fixed-nav button:hover { background: rgba(255,107,53,0.2); }
+    .main .block-container { padding-top: 5rem !important; }
+    /* Cards */
     .program-card {
-        background: linear-gradient(145deg, #1e1e3f, #2a2a5a);
-        border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
-        border-left: 5px solid #ff6b35; box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        background: rgba(255,255,255,0.05); backdrop-filter: blur(15px);
+        border: 1px solid rgba(255,107,53,0.4); border-radius: 20px;
+        padding: 1.5rem; margin: 0.8rem 0;
+        box-shadow: 0 0 20px rgba(255,107,53,0.15);
     }
     .rest-card {
-        background: linear-gradient(145deg, #1a1a2e, #252545);
-        border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
-        border-left: 5px solid #4ecdc4; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        background: rgba(255,255,255,0.03); backdrop-filter: blur(15px);
+        border: 1px solid rgba(78,205,196,0.4); border-radius: 20px;
+        padding: 1.5rem; margin: 0.8rem 0;
     }
     .stButton > button {
         background: linear-gradient(135deg, #ff6b35, #ff8f5e);
-        border: none; color: white; border-radius: 20px;
+        border: none; color: white; border-radius: 20px; box-shadow: 0 4px 15px rgba(255,107,53,0.4);
     }
+    .stButton > button:hover { transform: scale(1.02); box-shadow: 0 6px 20px rgba(255,107,53,0.6); }
     .streamlit-expanderHeader {
         background: rgba(255,255,255,0.05); border-radius: 12px;
-        border: 1px solid rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,107,53,0.3);
     }
     .chat-container { max-height: calc(100vh - 200px); overflow-y: auto; }
     </style>
@@ -330,46 +337,50 @@ else:
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Outfit', sans-serif; color: #111; }
+    html, body, [class*="css"] { font-family: 'Outfit', sans-serif; color: #1a1a2e; }
     .main { background: linear-gradient(135deg, #f0f2f5, #d9e2ec); }
     .stApp { background: transparent; }
     [data-testid="stSidebar"] {
-        background: rgba(255,255,255,0.95); backdrop-filter: blur(20px);
-        border-right: 1px solid rgba(0,0,0,0.1); color: #111;
+        background: rgba(255,255,255,0.9); backdrop-filter: blur(25px);
+        border-right: 1px solid rgba(0,0,0,0.1);
     }
-    .sticky-nav {
-        position: sticky; top: 0; z-index: 999;
-        background: linear-gradient(90deg, #ffffff, #f0f0f0);
-        padding: 0.6rem 0; border-bottom: 2px solid #ff6b35;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-        border-radius: 0 0 20px 20px;
-        margin-bottom: 1rem;
+    .fixed-nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+        background: rgba(255,255,255,0.9); backdrop-filter: blur(20px);
+        padding: 0.5rem 0; border-bottom: 2px solid #ff6b35;
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        border-radius: 0 0 24px 24px;
     }
-    .sticky-nav button { font-weight: 600; letter-spacing: 0.5px; color: #111; }
+    .fixed-nav button {
+        font-weight: 600; letter-spacing: 0.5px;
+        background: transparent; color: #1a1a2e; border: 1px solid rgba(255,107,53,0.5);
+    }
+    .fixed-nav button:hover { background: rgba(255,107,53,0.1); }
+    .main .block-container { padding-top: 5rem !important; }
     .program-card {
-        background: #ffffff; border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
-        border-left: 5px solid #ff6b35; box-shadow: 0 8px 20px rgba(0,0,0,0.05);
-        color: #111;
+        background: rgba(255,255,255,0.9); backdrop-filter: blur(15px);
+        border: 1px solid rgba(255,107,53,0.4); border-radius: 20px;
+        padding: 1.5rem; margin: 0.8rem 0; color: #1a1a2e;
     }
     .rest-card {
-        background: #e0f7fa; border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
-        border-left: 5px solid #4ecdc4; box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        color: #111;
+        background: rgba(255,255,255,0.8); backdrop-filter: blur(15px);
+        border: 1px solid rgba(78,205,196,0.4); border-radius: 20px;
+        padding: 1.5rem; margin: 0.8rem 0; color: #1a1a2e;
     }
     .stButton > button {
         background: linear-gradient(135deg, #ff6b35, #ff8f5e);
-        border: none; color: white; border-radius: 20px;
+        border: none; color: white; border-radius: 20px; box-shadow: 0 4px 15px rgba(255,107,53,0.4);
     }
     .streamlit-expanderHeader {
         background: rgba(0,0,0,0.03); border-radius: 12px;
-        border: 1px solid rgba(0,0,0,0.1); color: #111;
+        border: 1px solid rgba(0,0,0,0.1);
     }
     .chat-container { max-height: calc(100vh - 200px); overflow-y: auto; }
-    /* Override Streamlit default text colors in light mode */
+    /* Override Streamlit defaults for light mode */
     .stMarkdown, .stText, .stCaption, .stMetric, label, .stSelectbox, .stTextInput, .stNumberInput {
-        color: #111 !important;
+        color: #1a1a2e !important;
     }
-    input, textarea, select { color: #111 !important; background: #fff !important; }
+    input, textarea, select { color: #1a1a2e !important; background: #fff !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -475,11 +486,11 @@ if not gym_bro.profile:
             st.session_state.show_intro = False; st.rerun()
     st.stop()
 
-# ---------- Sticky Navigation ----------
+# ---------- Fixed Top Navigation ----------
 if "current_page" not in st.session_state:
     st.session_state.current_page = "👤 Profile"
 
-st.markdown('<div class="sticky-nav">', unsafe_allow_html=True)
+st.markdown('<div class="fixed-nav">', unsafe_allow_html=True)
 cols = st.columns(5)
 pages = ["👤 Profile", "💪 Log Workout", "📊 Progress", "🎯 My Program", "🤖 AI Chat"]
 for idx, page_name in enumerate(pages):
@@ -494,7 +505,6 @@ page = st.session_state.current_page
 
 # ---------- Sidebar ----------
 with st.sidebar:
-    # Theme toggle
     theme_toggle = st.radio("Theme", ["dark", "light"], horizontal=True, index=0 if st.session_state.theme=="dark" else 1)
     if theme_toggle != st.session_state.theme:
         st.session_state.theme = theme_toggle
