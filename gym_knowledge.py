@@ -1,4 +1,4 @@
-# gym_knowledge.py – Extended knowledge base for Gym Bro
+# gym_knowledge.py – Extended knowledge for Gym Bro X
 
 EXERCISE_DB = {
     "barbell_back_squat": {
@@ -33,11 +33,6 @@ EXERCISE_DB = {
             "Take slack out of bar before pulling",
             "Push floor away, don't pull bar up",
             "Lockout: squeeze glutes, don't hyperextend"
-        ],
-        "common_mistakes": [
-            "Hips shooting up – start with higher hips, deficit deadlifts",
-            "Rounding lower back – improve bracing, romanian deadlifts",
-            "Bar drifting away – engage lats, think 'paint legs'"
         ]
     },
     "bench_press": {
@@ -89,7 +84,7 @@ EXERCISE_DB = {
             "Squeeze shoulder blades at top"
         ]
     }
-    # Add many more exercises here as needed
+    # Add many more exercises as needed
 }
 
 TRAINING_PRINCIPLES = {

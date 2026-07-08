@@ -1,4 +1,4 @@
-# tools.py – Ultra‑robust JSON parser, web search, form analysis
+# tools.py – Gym Bro X Final
 
 import json, re, io, base64
 from duckduckgo_search import DDGS
@@ -18,7 +18,7 @@ def search_exercises(query: str, max_results: int = 3) -> str:
     except Exception as e:
         return f"Search failed: {e}"
 
-# ---------- Form Analysis ----------
+# ---------- Form Analysis (GPT‑4 Vision) ----------
 def analyze_form(image_file, client) -> str:
     try:
         image = Image.open(image_file)
@@ -31,7 +31,7 @@ def analyze_form(image_file, client) -> str:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Analyze this gym exercise form."},
+                        {"type": "text", "text": "Analyze this gym exercise form. Point out any mistakes, risk of injury, and how to correct them. Be encouraging but direct."},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
                     ]
                 }
@@ -44,83 +44,89 @@ def analyze_form(image_file, client) -> str:
 
 # ---------- JSON Repair & Parsing ----------
 def repair_json(j_str: str) -> str:
-    """Aggressively fix common JSON errors, especially from AI."""
-    # Remove trailing commas before closing brackets/braces
-    j_str = re.sub(r',\s*([}\]])', r'\1', j_str)
+    """Aggressively fix common JSON errors from AI."""
     # Remove anything after the last closing brace
     last_brace = j_str.rfind('}')
     if last_brace != -1:
         j_str = j_str[:last_brace+1]
-    # Balance braces and brackets
-    open_braces   = j_str.count('{') - j_str.count('}')
-    open_brackets = j_str.count('[') - j_str.count(']')
-    j_str += ']' * max(0, open_brackets) + '}' * max(0, open_braces)
-    # Fix unterminated strings – add a closing quote if we have an odd number
-    cleaned = re.sub(r'\\"', '', j_str)          # remove escaped quotes for counting
+    # Remove trailing commas before closing brackets/braces
+    j_str = re.sub(r',\s*([}\]])', r'\1', j_str)
+    # Fix missing commas between consecutive strings, numbers, or objects
+    # e.g., "a""b" -> "a", "b"
+    j_str = re.sub(r'"\s*\n?\s*"', '", "', j_str)
+    # e.g., }" or ]" -> }, " or ], "
+    j_str = re.sub(r'([}\]\d])\s*\n?\s*"', r'\1, "', j_str)
+    # e.g., number followed by number: 123 456 -> 123, 456
+    j_str = re.sub(r'(\d)\s+(\d)', r'\1, \2', j_str)
+    # Fix unterminated strings – if odd number of unescaped quotes, append one
+    cleaned = re.sub(r'\\"', '', j_str)
     if cleaned.count('"') % 2 != 0:
         j_str += '"'
     # Escape unescaped newlines inside strings (common AI mistake)
-    # We do a safe replacement: replace literal newline with \n only when inside quotes.
-    # Simple approach: replace all newlines not preceded by backslash with \\n
     j_str = re.sub(r'(?<!\\)\n', r'\\n', j_str)
-    # Remove stray backslashes before quotes (the AI sometimes puts \")
-    j_str = j_str.replace('\\"', '"')            # then we fix again later? No, keep as is.
-    # Fix missing commas between objects in arrays/objects
-    # Insert comma before a new key (i.e., before a quote that follows a closing brace/bracket)
-    j_str = re.sub(r'(["}\]\d])\s*\n?\s*"', r'\1, "', j_str)
-    # Also, insert comma before a new element in an array (after a number/boolean)
-    j_str = re.sub(r'(\d)\s+(\d)', r'\1, \2', j_str)   # two numbers separated by space -> comma
-    # Remove comments (//)
-    j_str = re.sub(r'//.*', '', j_str)
+    # Balance braces and brackets
+    open_braces = j_str.count('{') - j_str.count('}')
+    open_brackets = j_str.count('[') - j_str.count(']')
+    j_str += ']' * max(0, open_brackets) + '}' * max(0, open_braces)
     return j_str
 
 def parse_program_payload(text: str):
-    """Extract a valid program JSON from any text. Returns (program_dict, error_msg)."""
+    """
+    Extract a valid program JSON from any text.
+    Returns (program_dict, error_msg). One will be None.
+    """
     if not text:
         return None, "Empty response."
 
-    # Try multiple strategies to find a JSON object containing "program_name"
-    match = None
-    # 1) Code block
+    # Attempt 1: Standard JSON code block
     match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
     if not match:
-        # 2) Plain object with program_name
+        # Attempt 2: Look for a JSON object containing "program_name"
         match = re.search(r'(\{[^{}]*"program_name"[^{}]*\})', text, re.DOTALL)
         if not match:
-            # 3) First { to last }
+            # Attempt 3: Find first { and last } and hope it's complete
             first = text.find('{')
             last = text.rfind('}')
             if first != -1 and last > first:
                 candidate = text[first:last+1]
                 if '"program_name"' in candidate and '"days"' in candidate:
                     match = re.search(r'(\{.*\})', candidate, re.DOTALL)
-
     if not match:
         return None, "No JSON object with 'program_name' and 'days' found."
 
-    raw = match.group(1)
+    raw_json = match.group(1)
 
-    # Attempt 1: parse as-is
-    for attempt in range(3):
-        try:
-            prog = json.loads(raw)
-            if "program_name" in prog and "days" in prog:
-                return prog, None
-        except json.JSONDecodeError:
-            if attempt == 0:
-                raw = repair_json(raw)
-            elif attempt == 1:
-                # Try to extract just the JSON part from inside a code block again (if any)
-                inner_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', raw, re.DOTALL)
-                if inner_match:
-                    raw = inner_match.group(1)
-                raw = repair_json(raw)
+    # Try as-is
+    try:
+        prog = json.loads(raw_json)
+        if "program_name" in prog and "days" in prog:
+            return prog, None
+    except json.JSONDecodeError:
+        pass
 
-    return None, f"Could not parse program JSON. Raw snippet: {raw[:200]}..."
+    # Try repaired
+    repaired = repair_json(raw_json)
+    try:
+        prog = json.loads(repaired)
+        if "program_name" in prog and "days" in prog:
+            return prog, None
+    except json.JSONDecodeError:
+        pass
+
+    # Last resort: maybe it's double‑encoded (a string containing JSON)
+    try:
+        inner = json.loads(raw_json)
+        if isinstance(inner, str):
+            return parse_program_payload(inner)
+    except:
+        pass
+
+    return None, f"Could not parse program JSON. Raw snippet: {raw_json[:200]}..."
 
 def normalize_exercises(program: dict):
     exercises = []
     for day in program.get("days", []):
+        day_name = day.get("day", "Unknown")
         for ex in day.get("exercises", []):
             name = ex.get("name", "exercise")
             sets_data = []
@@ -142,7 +148,7 @@ def normalize_exercises(program: dict):
             else:
                 try:
                     num_sets = int(sets_field)
-                except:
+                except (ValueError, TypeError):
                     num_sets = 3
                 reps_field = ex.get("reps", "10")
                 if isinstance(reps_field, str) and "-" in reps_field:
@@ -150,7 +156,7 @@ def normalize_exercises(program: dict):
                 else:
                     try:
                         reps = int(reps_field)
-                    except:
+                    except (ValueError, TypeError):
                         reps = 10
                 notes = ex.get("notes", "")
                 for _ in range(num_sets):
