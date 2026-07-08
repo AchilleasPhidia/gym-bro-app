@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Sticky nav that follows, perfect light/dark, ultra-smart AI)
+# app.py – Gym Bro X (Light theme fixed, sticky nav that follows, ultra‑smart AI)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -24,7 +24,7 @@ def delete_user_folder(username):
     return False
 
 # ============================================
-# GYM BRO CLASS (unchanged, full implementation)
+# GYM BRO CLASS (full implementation, unchanged)
 # ============================================
 class GymBro:
     def __init__(self, username="default"):
@@ -295,12 +295,14 @@ if st.session_state.theme == "dark":
         background: rgba(15,12,41,0.8); backdrop-filter: blur(20px);
         border-right: 1px solid rgba(255,255,255,0.1);
     }
+    /* Sticky nav inside the main container */
     .sticky-nav {
-        position: sticky; top: 0; z-index: 9999;
+        position: sticky; top: 0; z-index: 999;
         background: linear-gradient(90deg, #1a1a40, #2d2d6b);
         padding: 0.6rem 0; border-bottom: 2px solid #ff6b35;
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         border-radius: 0 0 20px 20px;
+        margin-bottom: 1rem;
     }
     .sticky-nav button { font-weight: 600; letter-spacing: 0.5px; color: #f5f7fb; }
     .program-card {
@@ -328,43 +330,46 @@ else:
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Outfit', sans-serif; color: #1a1a2e; }
+    html, body, [class*="css"] { font-family: 'Outfit', sans-serif; color: #111; }
     .main { background: linear-gradient(135deg, #f0f2f5, #d9e2ec); }
     .stApp { background: transparent; }
     [data-testid="stSidebar"] {
-        background: rgba(255,255,255,0.9); backdrop-filter: blur(20px);
-        border-right: 1px solid rgba(0,0,0,0.1);
+        background: rgba(255,255,255,0.95); backdrop-filter: blur(20px);
+        border-right: 1px solid rgba(0,0,0,0.1); color: #111;
     }
     .sticky-nav {
-        position: sticky; top: 0; z-index: 9999;
-        background: linear-gradient(90deg, #4ecdc4, #44a08d);
+        position: sticky; top: 0; z-index: 999;
+        background: linear-gradient(90deg, #ffffff, #f0f0f0);
         padding: 0.6rem 0; border-bottom: 2px solid #ff6b35;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
         border-radius: 0 0 20px 20px;
+        margin-bottom: 1rem;
     }
-    .sticky-nav button { font-weight: 600; letter-spacing: 0.5px; color: #1a1a2e; }
+    .sticky-nav button { font-weight: 600; letter-spacing: 0.5px; color: #111; }
     .program-card {
-        background: linear-gradient(145deg, #ffffff, #e6e6e6);
-        border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
-        border-left: 5px solid #ff6b35; box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-        color: #1a1a2e;
+        background: #ffffff; border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
+        border-left: 5px solid #ff6b35; box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+        color: #111;
     }
     .rest-card {
-        background: linear-gradient(145deg, #e0f7fa, #b2ebf2);
-        border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
-        border-left: 5px solid #4ecdc4; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        color: #1a1a2e;
+        background: #e0f7fa; border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
+        border-left: 5px solid #4ecdc4; box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        color: #111;
     }
     .stButton > button {
         background: linear-gradient(135deg, #ff6b35, #ff8f5e);
         border: none; color: white; border-radius: 20px;
     }
     .streamlit-expanderHeader {
-        background: rgba(0,0,0,0.05); border-radius: 12px;
-        border: 1px solid rgba(0,0,0,0.1);
+        background: rgba(0,0,0,0.03); border-radius: 12px;
+        border: 1px solid rgba(0,0,0,0.1); color: #111;
     }
     .chat-container { max-height: calc(100vh - 200px); overflow-y: auto; }
-    input, textarea, select { color: #1a1a2e !important; background: white !important; }
+    /* Override Streamlit default text colors in light mode */
+    .stMarkdown, .stText, .stCaption, .stMetric, label, .stSelectbox, .stTextInput, .stNumberInput {
+        color: #111 !important;
+    }
+    input, textarea, select { color: #111 !important; background: #fff !important; }
     </style>
     """, unsafe_allow_html=True)
 
