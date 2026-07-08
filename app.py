@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Visible scroll button, flawless light theme, all features)
+# app.py – Gym Bro X (Stunning UI, perfect light/dark, all features)
 
 import streamlit as st
 import json, random, os, shutil, re, calendar
@@ -24,7 +24,7 @@ def delete_user_folder(username):
     return False
 
 # ============================================
-# GYM BRO CLASS
+# GYM BRO CLASS (unchanged, full implementation)
 # ============================================
 class GymBro:
     def __init__(self, username="default"):
@@ -256,33 +256,36 @@ st.set_page_config(page_title="Gym Bro X", page_icon="💎", layout="wide")
 
 if "theme" not in st.session_state: st.session_state.theme = "dark"
 
+# ---------- COMPLETELY REDESIGNED UI ----------
 if st.session_state.theme == "dark":
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Outfit', sans-serif; color: #f0f0f0; }
-    .main { background: radial-gradient(circle at 20% 20%, #1a1a2e, #0f0c29); }
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Outfit', sans-serif; color: #e0e0e0; }
+    .main { background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3e 50%, #0d0d2b 100%); }
     .stApp { background: transparent; }
-    [data-testid="stSidebar"] { background: rgba(15,12,41,0.8); backdrop-filter: blur(25px); border-right: 1px solid rgba(255,107,53,0.3); }
-    .fixed-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 9999; background: rgba(20,20,50,0.85); backdrop-filter: blur(20px); padding: 0.5rem 0; border-bottom: 2px solid #ff6b35; box-shadow: 0 0 30px rgba(255,107,53,0.3); border-radius: 0 0 24px 24px; }
-    .fixed-nav button { font-weight: 600; letter-spacing: 0.5px; background: transparent; color: #f0f0f0; border: 1px solid rgba(255,107,53,0.5); }
-    .fixed-nav button:hover { background: rgba(255,107,53,0.2); }
+    [data-testid="stSidebar"] { background: rgba(10,10,30,0.9); backdrop-filter: blur(25px); border-right: 1px solid rgba(255,107,53,0.2); }
+    .fixed-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 9999; background: rgba(10,10,30,0.9); backdrop-filter: blur(20px); padding: 0.5rem 0; border-bottom: 2px solid #ff6b35; box-shadow: 0 4px 30px rgba(0,0,0,0.5); border-radius: 0 0 24px 24px; }
+    .fixed-nav button { font-weight: 500; letter-spacing: 0.5px; background: transparent; color: #e0e0e0; border: 1px solid rgba(255,107,53,0.4); border-radius: 12px; padding: 0.4rem 1rem; }
+    .fixed-nav button:hover { background: rgba(255,107,53,0.15); }
     .main .block-container { padding-top: 5rem !important; }
-    .program-card { background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border: 1px solid rgba(255,107,53,0.4); border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0; box-shadow: 0 0 20px rgba(255,107,53,0.15); }
-    .rest-card { background: rgba(255,255,255,0.03); backdrop-filter: blur(15px); border: 1px solid rgba(78,205,196,0.4); border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0; }
-    .history-card { background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border: 1px solid rgba(255,107,53,0.3); border-radius: 20px; padding: 1.2rem; margin: 0.5rem 0; }
-    .history-card:hover { border-color: rgba(255,107,53,0.8); box-shadow: 0 0 25px rgba(255,107,53,0.25); }
-    .calendar-day { display: inline-block; width: 38px; height: 38px; line-height: 38px; text-align: center; border-radius: 10px; margin: 2px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
-    .calendar-day.trained { background: rgba(255,107,53,0.8); color: #fff; box-shadow: 0 0 12px rgba(255,107,53,0.5); }
+    .program-card { background: rgba(255,255,255,0.04); backdrop-filter: blur(15px); border: 1px solid rgba(255,107,53,0.3); border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+    .rest-card { background: rgba(255,255,255,0.02); backdrop-filter: blur(15px); border: 1px solid rgba(78,205,196,0.3); border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0; }
+    .history-card { background: rgba(255,255,255,0.04); backdrop-filter: blur(15px); border: 1px solid rgba(255,107,53,0.2); border-radius: 20px; padding: 1.2rem; margin: 0.5rem 0; transition: all 0.2s; }
+    .history-card:hover { border-color: rgba(255,107,53,0.6); box-shadow: 0 4px 20px rgba(255,107,53,0.15); }
+    .streak-card { background: rgba(255,255,255,0.05); border-radius: 14px; padding: 0.6rem 0.3rem; margin: 0.2rem 0; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
+    .calendar-day { display: inline-block; width: 38px; height: 38px; line-height: 38px; text-align: center; border-radius: 10px; margin: 2px; font-weight: 600; font-size: 0.85rem; cursor: pointer; background: rgba(255,255,255,0.05); color: #e0e0e0; }
+    .calendar-day.trained { background: rgba(255,107,53,0.8); color: #fff; box-shadow: 0 2px 10px rgba(255,107,53,0.4); }
     .calendar-day.today { border: 2px solid #ff6b35; }
     .calendar-day.empty { background: transparent; color: #555; }
-    .calendar-day:hover { transform: scale(1.1); }
-    .stButton > button { background: linear-gradient(135deg, #ff6b35, #ff8f5e); border: none; color: white; border-radius: 20px; box-shadow: 0 4px 15px rgba(255,107,53,0.4); }
-    .streamlit-expanderHeader { background: rgba(255,255,255,0.05); border-radius: 12px; border: 1px solid rgba(255,107,53,0.3); }
+    .calendar-day:hover { transform: scale(1.1); background: rgba(255,255,255,0.1); }
+    .stButton > button { background: linear-gradient(135deg, #ff6b35, #ff8f5e); border: none; color: white; border-radius: 14px; box-shadow: 0 4px 15px rgba(255,107,53,0.4); font-weight: 600; }
+    .stButton > button:hover { box-shadow: 0 6px 20px rgba(255,107,53,0.6); transform: translateY(-1px); }
+    .streamlit-expanderHeader { background: rgba(255,255,255,0.04); border-radius: 12px; border: 1px solid rgba(255,107,53,0.2); }
     .chat-container { max-height: calc(100vh - 200px); overflow-y: auto; }
-    .scroll-top-btn { position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; background: #ff6b35; color: white; border: none; border-radius: 50%; width: 48px; height: 48px; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 15px rgba(255,107,53,0.5); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; }
-    .scroll-top-btn:hover { background: #ff8f5e; }
+    .scroll-top-btn { position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; background: #ff6b35; color: white; border: none; border-radius: 50%; width: 48px; height: 48px; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 20px rgba(255,107,53,0.5); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; }
     .scroll-top-btn.visible { opacity: 1; }
+    .scroll-top-btn:hover { background: #ff8f5e; }
     </style>
     <script>
     window.addEventListener('scroll', function() {
@@ -298,44 +301,41 @@ if st.session_state.theme == "dark":
 else:
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Outfit', sans-serif; color: #1a1a2e; }
-    .main { background: linear-gradient(150deg, #f8f9fc 0%, #e8ecf1 50%, #dce2e8 100%); }
+    .main { background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f0 50%, #dfe3e8 100%); }
     .stApp { background: transparent; }
-    [data-testid="stSidebar"] { background: rgba(255,255,255,0.95); backdrop-filter: blur(25px); border-right: 1px solid rgba(0,0,0,0.08); box-shadow: 2px 0 20px rgba(0,0,0,0.05); }
-    .fixed-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 9999; background: rgba(255,255,255,0.95); backdrop-filter: blur(20px); padding: 0.5rem 0; border-bottom: 2px solid #ff6b35; box-shadow: 0 2px 20px rgba(0,0,0,0.06); border-radius: 0 0 24px 24px; }
-    .fixed-nav button { font-weight: 600; letter-spacing: 0.5px; background: transparent; color: #1a1a2e; border: 1px solid rgba(255,107,53,0.4); }
+    [data-testid="stSidebar"] { background: rgba(255,255,255,0.9); backdrop-filter: blur(25px); border-right: 1px solid rgba(0,0,0,0.08); box-shadow: 2px 0 20px rgba(0,0,0,0.04); }
+    .fixed-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 9999; background: rgba(255,255,255,0.9); backdrop-filter: blur(20px); padding: 0.5rem 0; border-bottom: 2px solid #ff6b35; box-shadow: 0 2px 20px rgba(0,0,0,0.06); border-radius: 0 0 24px 24px; }
+    .fixed-nav button { font-weight: 500; letter-spacing: 0.5px; background: transparent; color: #1a1a2e; border: 1px solid rgba(255,107,53,0.4); border-radius: 12px; padding: 0.4rem 1rem; }
     .fixed-nav button:hover { background: rgba(255,107,53,0.08); }
     .main .block-container { padding-top: 5rem !important; }
-    .program-card { background: #ffffff; border: 1px solid rgba(255,107,53,0.25); border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0; box-shadow: 0 4px 20px rgba(0,0,0,0.04); color: #1a1a2e; }
+    .program-card { background: #ffffff; border: 1px solid rgba(255,107,53,0.2); border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0; box-shadow: 0 4px 20px rgba(0,0,0,0.04); color: #1a1a2e; }
     .program-card h3 { color: #ff6b35; }
-    .rest-card { background: #f0fdf9; border: 1px solid rgba(78,205,196,0.3); border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0; box-shadow: 0 2px 12px rgba(0,0,0,0.03); color: #1a1a2e; }
+    .rest-card { background: #f0fdf9; border: 1px solid rgba(78,205,196,0.25); border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0; box-shadow: 0 2px 12px rgba(0,0,0,0.03); color: #1a1a2e; }
     .rest-card h3 { color: #4ecdc4; }
-    .history-card { background: #ffffff; border: 1px solid rgba(255,107,53,0.2); border-radius: 20px; padding: 1.2rem; margin: 0.5rem 0; box-shadow: 0 2px 12px rgba(0,0,0,0.04); color: #1a1a2e; }
-    .history-card:hover { border-color: rgba(255,107,53,0.6); box-shadow: 0 4px 20px rgba(255,107,53,0.12); }
-    .calendar-day { display: inline-block; width: 38px; height: 38px; line-height: 38px; text-align: center; border-radius: 10px; margin: 2px; font-weight: 600; font-size: 0.85rem; cursor: pointer; color: #1a1a2e; }
+    .history-card { background: #ffffff; border: 1px solid rgba(255,107,53,0.15); border-radius: 20px; padding: 1.2rem; margin: 0.5rem 0; box-shadow: 0 2px 12px rgba(0,0,0,0.04); color: #1a1a2e; }
+    .history-card:hover { border-color: rgba(255,107,53,0.5); box-shadow: 0 4px 20px rgba(255,107,53,0.1); }
+    .streak-card { background: #ffffff; border-radius: 14px; padding: 0.6rem 0.3rem; margin: 0.2rem 0; border: 1px solid rgba(0,0,0,0.06); text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .calendar-day { display: inline-block; width: 38px; height: 38px; line-height: 38px; text-align: center; border-radius: 10px; margin: 2px; font-weight: 600; font-size: 0.85rem; cursor: pointer; background: #f0f2f5; color: #1a1a2e; }
     .calendar-day.trained { background: rgba(255,107,53,0.85); color: #fff; box-shadow: 0 2px 10px rgba(255,107,53,0.3); }
     .calendar-day.today { border: 2px solid #ff6b35; }
     .calendar-day.empty { background: transparent; color: #bbb; }
     .calendar-day:hover { transform: scale(1.1); background: rgba(255,107,53,0.1); }
-    .stButton > button { background: linear-gradient(135deg, #ff6b35, #ff8f5e); border: none; color: white; border-radius: 20px; box-shadow: 0 4px 15px rgba(255,107,53,0.3); font-weight: 600; }
+    .stButton > button { background: linear-gradient(135deg, #ff6b35, #ff8f5e); border: none; color: white; border-radius: 14px; box-shadow: 0 4px 15px rgba(255,107,53,0.3); font-weight: 600; }
     .stButton > button:hover { box-shadow: 0 6px 20px rgba(255,107,53,0.5); transform: translateY(-1px); }
+    .streamlit-expanderHeader { background: #ffffff; border-radius: 12px; border: 1px solid #e0e0e0; color: #1a1a2e !important; }
+    .chat-container { max-height: calc(100vh - 200px); overflow-y: auto; }
+    .scroll-top-btn { position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; background: #ff6b35; color: white; border: none; border-radius: 50%; width: 48px; height: 48px; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 20px rgba(255,107,53,0.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; }
+    .scroll-top-btn.visible { opacity: 1; }
+    .scroll-top-btn:hover { background: #ff8f5e; }
+    .stChatMessage { background: #ffffff !important; border: 1px solid #e0e0e0; border-radius: 16px; }
+    .stChatMessage [data-testid="stChatMessageContent"] { color: #1a1a2e !important; }
     .stMarkdown, .stText, .stCaption, label, .stMetricLabel, .stMetricValue, .stMetricDelta { color: #1a1a2e !important; }
     input, textarea, select { color: #1a1a2e !important; background: #fff !important; border: 1px solid #ddd !important; border-radius: 10px !important; }
     input:focus, textarea:focus, select:focus { border-color: #ff6b35 !important; box-shadow: 0 0 0 2px rgba(255,107,53,0.2) !important; }
-    .streamlit-expanderHeader { background: #f8f9fc; border-radius: 12px; border: 1px solid #e0e0e0; color: #1a1a2e !important; }
-    .chat-container { max-height: calc(100vh - 200px); overflow-y: auto; position: relative; }
-    .scroll-top-btn { position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; background: linear-gradient(135deg, #ff6b35, #ff8f5e); color: white; border: none; border-radius: 50%; width: 48px; height: 48px; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 20px rgba(255,107,53,0.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; }
-    .scroll-top-btn.visible { opacity: 1; }
-    .scroll-top-btn:hover { transform: scale(1.1); box-shadow: 0 6px 25px rgba(255,107,53,0.6); }
-    .stTabs [data-testid="stTab"] { color: #1a1a2e; }
-    .stTabs [aria-selected="true"] { color: #ff6b35 !important; font-weight: 700; }
-    .stChatMessage { background: #ffffff !important; border: 1px solid #e0e0e0; border-radius: 16px; }
-    .stChatMessage [data-testid="stChatMessageContent"] { color: #1a1a2e !important; }
+    .stSlider label, .stSelectbox label, .stTextInput label, .stNumberInput label, .stRadio label { color: #1a1a2e !important; }
     [data-testid="stSidebarUserContent"] { background: transparent !important; color: #1a1a2e !important; }
-    .st-emotion-cache-1kyxreq { color: #1a1a2e !important; }
-    .stSlider label, .stSelectbox label, .stTextInput label, .stNumberInput label { color: #1a1a2e !important; }
-    .stRadio label { color: #1a1a2e !important; }
     </style>
     <script>
     window.addEventListener('scroll', function() {
@@ -447,7 +447,12 @@ with st.sidebar:
     if gym_bro.profile:
         streak = gym_bro.get_streak_info()
         c1,c2,c3 = st.columns(3)
-        c1.metric("🔥", streak["current"]); c2.metric("👑", streak["longest"]); c3.metric("📅", f"{streak['week']}/7")
+        with c1:
+            st.markdown(f'<div class="streak-card"><h3 style="margin:0;font-size:1.8rem;font-weight:700;">🔥 {streak["current"]}</h3><small style="opacity:0.7;">Streak</small></div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown(f'<div class="streak-card"><h3 style="margin:0;font-size:1.8rem;font-weight:700;">👑 {streak["longest"]}</h3><small style="opacity:0.7;">Best</small></div>', unsafe_allow_html=True)
+        with c3:
+            st.markdown(f'<div class="streak-card"><h3 style="margin:0;font-size:1.8rem;font-weight:700;">📅 {streak["week"]}/7</h3><small style="opacity:0.7;">This Week</small></div>', unsafe_allow_html=True)
     st.markdown("---")
     if gym_bro.profile:
         with st.expander("👤 Your Profile", expanded=False):
@@ -491,7 +496,7 @@ with st.sidebar:
             if st.button("Cancel"): st.session_state.delete_mode = False; st.rerun()
 
 # ============================================
-# PAGE CONTENT
+# PAGE CONTENT (unchanged from previous working version)
 # ============================================
 if page == "💪 Log Workout":
     st.header("Log Workout")
@@ -641,7 +646,6 @@ elif page == "🤖 AI Chat":
     if gym_bro.chat_history and len(st.session_state.chat_messages) == 0:
         for msg in gym_bro.chat_history[-500:]: st.session_state.chat_messages.append({"role": msg["role"], "content": msg["content"]})
 
-    # Display only the last 15 messages
     visible_messages = st.session_state.chat_messages[-15:]
     st.markdown('<div class="chat-container" id="chatBox">', unsafe_allow_html=True)
     for msg in visible_messages:
@@ -649,7 +653,6 @@ elif page == "🤖 AI Chat":
             st.markdown(msg["content"])
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Scroll-to-top button (always in DOM, visible via JS)
     st.markdown("""
     <button id="scrollTopBtn" class="scroll-top-btn" onclick="scrollToTop()" title="Scroll to top">⬆️</button>
     """, unsafe_allow_html=True)
@@ -679,10 +682,8 @@ Be encouraging, use 'bro' and emojis. Personalise everything. Create programs im
     ]
 
     if prompt := st.chat_input("Ask anything..."):
-        # Add user message immediately
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         gym_bro.save_chat_message("user", prompt)
-
         with st.spinner("Gym Bro is thinking..."):
             try:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -761,7 +762,6 @@ Be encouraging, use 'bro' and emojis. Personalise everything. Create programs im
                     else:
                         reply = "Unknown function."
                 else:
-                    # Fallback: detect program JSON directly in text
                     prog, _ = parse_program_payload(msg.content)
                     if prog:
                         gym_bro.current_program = prog
@@ -770,15 +770,12 @@ Be encouraging, use 'bro' and emojis. Personalise everything. Create programs im
                     else:
                         reply = msg.content
 
-                # Append assistant reply and save
                 st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                 gym_bro.save_chat_message("assistant", reply)
             except Exception as e:
                 reply = f"Error: {e}"
                 st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                 gym_bro.save_chat_message("assistant", reply)
-
-        # Rerun so the new message displays immediately
         st.rerun()
 
 st.markdown("---")
