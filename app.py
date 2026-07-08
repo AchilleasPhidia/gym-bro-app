@@ -1,4 +1,4 @@
-# app.py – Gym Bro v9.0 (Self-learning AI, memory, full profile edit, knowledge base)
+# app.py – Gym Bro v9.1 (Fixed workout logging JSON, self‑learning, full profile edit)
 
 import streamlit as st
 import json
@@ -122,7 +122,6 @@ class GymBro:
     def generate_program(self):
         if not self.profile:
             return None
-        # Try OpenAI with full context
         try:
             from openai import OpenAI
             if "OPENAI_API_KEY" in st.secrets:
@@ -151,7 +150,7 @@ Consider their experience, equipment, injuries, and goals."""
                     return prog
         except:
             pass
-        # Offline fallback (same as before)
+        # Offline fallback
         days = self.profile.get('training_days', 4)
         days_map = {2: ["Monday", "Thursday"], 3: ["Monday", "Wednesday", "Friday"],
                     4: ["Monday", "Tuesday", "Thursday", "Friday"],
@@ -654,12 +653,10 @@ with tab0:
         if st.session_state.get("edit_profile"):
             with st.form("full_profile_edit"):
                 st.subheader("Edit Your Full Profile")
-                # Pre-fill all fields with current values
                 age = st.number_input("Age", 10, 100, p.get("age", 25))
                 gender = st.selectbox("Gender", ["Male", "Female", "Other", "Prefer not to say"],
                                       index=["Male","Female","Other","Prefer not to say"].index(p.get("gender","Male")))
                 height = st.number_input("Height (cm)", 100, 250, p.get("height", 175))
-                # Weight and body fat are handled via measurements, but we can show the latest
                 if gym_bro.body_measurements:
                     latest_weight = gym_bro.body_measurements[-1]["weight"]
                     latest_bf = gym_bro.body_measurements[-1].get("body_fat") or 0.0
@@ -929,7 +926,7 @@ with tab4:
             gym_bro.generate_program()
             st.rerun()
 
-# --- TAB 5: AI CHAT (self‑learning, memory, knowledge) ---
+# --- TAB 5: AI CHAT (self‑learning, memory, knowledge, FIXED workout logging) ---
 with tab5:
     st.header("💬 Chat with Gym Bro AI")
     if "chat_messages" not in st.session_state:
@@ -966,10 +963,10 @@ Current Program:
 You can use these tools:
 - search_web(query) – to find the latest exercise science or tips
 - create_program(program_json) – to create or update the user's workout plan
-- log_todays_workout(exercises) – to log a completed workout
+- log_todays_workout(exercises) – to log a completed workout. The exercises argument must be a JSON list of objects, with double quotes escaped properly, e.g. '[{{\"name\":\"Squat\",\"sets\":[{{\"weight\":100,\"reps\":5,\"notes\":\"\"}}]}}]'
 - save_learned_knowledge(fact) – to store a new fact permanently
 
-Always be encouraging, use 'bro', emojis, and hype. When you learn something useful from a web search or from the user, save it with save_learned_knowledge so you remember it forever. If you don't know something, search the web proactively!"""
+Always be encouraging, use 'bro', emojis, and hype. When returning JSON strings, escape double quotes with backslashes. When you learn something useful from a web search or from the user, save it with save_learned_knowledge so you remember it forever. If you don't know something, search the web proactively!"""
 
     functions = [
         {
@@ -985,11 +982,14 @@ Always be encouraging, use 'bro', emojis, and hype. When you learn something use
         },
         {
             "name": "log_todays_workout",
-            "description": "Log a completed workout for the current day. Provide a JSON list of exercises.",
+            "description": "Log a completed workout for the current day. Provide a JSON list of exercises with properly escaped quotes.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "exercises": {"type": "string", "description": "JSON list of exercises as a string, e.g. '[{\"name\":\"Squat\",\"sets\":[{\"weight\":100,\"reps\":5}]}]'"}
+                    "exercises": {
+                        "type": "string",
+                        "description": "JSON list of exercises. Example: [{\"name\":\"Squat\",\"sets\":[{\"weight\":100,\"reps\":5,\"notes\":\"\"}]}]"
+                    }
                 },
                 "required": ["exercises"]
             }
@@ -1060,7 +1060,16 @@ Always be encouraging, use 'bro', emojis, and hype. When you learn something use
                                 reply = f"Couldn't update program: {err}"
                         elif func_name == "log_todays_workout":
                             try:
-                                exercises = json.loads(args["exercises"])
+                                raw_exercises = args["exercises"]
+                                # Attempt to load the exercises JSON string
+                                try:
+                                    exercises = json.loads(raw_exercises)
+                                except json.JSONDecodeError:
+                                    # Fix unescaped quotes and trailing commas
+                                    repaired = raw_exercises
+                                    repaired = re.sub(r'(?<!\\)"', r'\\"', repaired)
+                                    repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
+                                    exercises = json.loads(repaired)
                                 if not isinstance(exercises, list):
                                     raise ValueError("Exercises must be a list")
                                 result = gym_bro.log_workout(exercises, 7, 7, 60)
@@ -1070,7 +1079,7 @@ Always be encouraging, use 'bro', emojis, and hype. When you learn something use
                         elif func_name == "search_web":
                             results = search_exercises(args["query"])
                             reply = f"Search results:\n{results}"
-                            # Optionally auto-learn the top result
+                            # Auto-learn the top result snippet
                             if results and "Link:" in results:
                                 gym_bro.add_learned_knowledge(f"From web search '{args['query']}': {results[:200]}")
                         elif func_name == "save_learned_knowledge":
@@ -1106,4 +1115,4 @@ with tab6:
                     st.error(f"Form analysis failed: {e}")
 
 st.markdown("---")
-st.caption(f"Gym Bro v9.0 | User: {username} | We go jim! 🏋️")
+st.caption(f"Gym Bro v9.1 | User: {username} | We go jim! 🏋️")
