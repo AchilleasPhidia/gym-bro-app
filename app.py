@@ -1,7 +1,7 @@
-# app.py – Gym Bro X (Workout Calendar, full history, stunning UI)
+# app.py – Gym Bro X (Fixed calendar, profile in sidebar, futuristic UI)
 
 import streamlit as st
-import json, random, os, shutil, re
+import json, random, os, shutil, re, calendar
 from datetime import datetime, timedelta, date
 from typing import Dict, List
 import plotly.graph_objects as go
@@ -24,7 +24,7 @@ def delete_user_folder(username):
     return False
 
 # ============================================
-# GYM BRO CLASS (full implementation)
+# GYM BRO CLASS
 # ============================================
 class GymBro:
     def __init__(self, username="default"):
@@ -116,12 +116,7 @@ class GymBro:
                 from openai import OpenAI
                 if "OPENAI_API_KEY" in st.secrets:
                     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                    profile_text = self.get_profile_context()
-                    knowledge_text = get_knowledge_text()
-                    prompt = f"""Create a {self.profile.get('training_days', 4)}-day gym workout plan based on this user profile and knowledge base.
-Profile: {profile_text}
-Knowledge base: {knowledge_text}
-Return ONLY a valid JSON object with structure: {{"program_name": "...", "days": [{{"day": "Monday", "focus": "...", "exercises": [{{"name": "...", "sets": 3, "reps": "8-10", "notes": "..."}}]}}]}}"""
+                    prompt = f"""Create a {self.profile.get('training_days',4)}-day gym workout plan based on: {self.get_profile_context()} Return ONLY valid JSON with structure: {{"program_name":"...","days":[{{"day":"Monday","focus":"...","exercises":[{{"name":"...","sets":3,"reps":"8-10","notes":"..."}}]}}]}}"""
                     response = client.chat.completions.create(
                         model="gpt-3.5-turbo", messages=[{"role":"user","content":prompt}],
                         temperature=0.7, max_tokens=1500)
@@ -131,7 +126,7 @@ Return ONLY a valid JSON object with structure: {{"program_name": "...", "days":
                         self._save_json("current_program.json", prog)
                         return prog
             except: pass
-        days = self.profile.get('training_days', 4)
+        days = self.profile.get('training_days',4)
         days_map = {2: ["Monday","Thursday"], 3: ["Monday","Wednesday","Friday"],
                     4: ["Monday","Tuesday","Thursday","Friday"],
                     5: ["Monday","Tuesday","Wednesday","Thursday","Friday"]}
@@ -139,26 +134,25 @@ Return ONLY a valid JSON object with structure: {{"program_name": "...", "days":
         program = {"program_name":"Custom Plan","days":[]}
         for i,d in enumerate(day_names):
             if i%2==0:
-                focus="Upper Body"
-                exercises=[{"name":"Bench Press","sets":3,"reps":"8-10","notes":"Focus on control"},
-                           {"name":"Barbell Row","sets":3,"reps":"8-10","notes":"Squeeze at top"},
+                exercises=[{"name":"Bench Press","sets":3,"reps":"8-10","notes":"Focus"},
+                           {"name":"Barbell Row","sets":3,"reps":"8-10","notes":"Squeeze"},
                            {"name":"Overhead Press","sets":3,"reps":"10-12","notes":""},
-                           {"name":"Face Pulls","sets":3,"reps":"15-20","notes":"Light, perfect form"}]
+                           {"name":"Face Pulls","sets":3,"reps":"15-20","notes":"Light"}]
+                focus="Upper Body"
             else:
-                focus="Lower Body"
-                exercises=[{"name":"Barbell Squat","sets":3,"reps":"8-10","notes":"Depth over weight"},
-                           {"name":"Romanian Deadlift","sets":3,"reps":"10-12","notes":"Hamstring stretch"},
-                           {"name":"Leg Press","sets":3,"reps":"12-15","notes":"Constant tension"},
+                exercises=[{"name":"Barbell Squat","sets":3,"reps":"8-10","notes":"Depth"},
+                           {"name":"Romanian Deadlift","sets":3,"reps":"10-12","notes":"Stretch"},
+                           {"name":"Leg Press","sets":3,"reps":"12-15","notes":"Tension"},
                            {"name":"Calf Raises","sets":4,"reps":"15-20","notes":""}]
+                focus="Lower Body"
             program["days"].append({"day":d,"focus":focus,"exercises":exercises})
         self.current_program = program
         self._save_json("current_program.json", program)
         return program
 
     def log_workout(self, exercises_data, energy, sleep, duration):
-        workout = {
-            "date": datetime.now().isoformat(), "exercises": exercises_data,
-            "energy_level": energy, "sleep_quality": sleep, "duration_minutes": duration}
+        workout = {"date": datetime.now().isoformat(), "exercises": exercises_data,
+                   "energy_level": energy, "sleep_quality": sleep, "duration_minutes": duration}
         self.workouts.append(workout)
         self._save_json("workouts.json", self.workouts)
         for ex in exercises_data:
@@ -170,31 +164,30 @@ Return ONLY a valid JSON object with structure: {{"program_name": "...", "days":
             vol = sum(s["weight"]*s["reps"] for s in valid)
             best = max(valid, key=lambda s: s["weight"]*(1+s["reps"]/30))
             est1rm = best["weight"]*(1+best["reps"]/30)
-            self.exercise_progress[name].append({
-                "date": datetime.now().isoformat(), "volume": vol, "estimated_1rm": round(est1rm,1)})
+            self.exercise_progress[name].append({"date":datetime.now().isoformat(),"volume":vol,"estimated_1rm":round(est1rm,1)})
         self._save_json("progress.json", self.exercise_progress)
         prs = self._check_prs(exercises_data)
-        return {"feedback": self._generate_feedback(workout), "new_prs": prs, "total_workouts": len(self.workouts)}
+        return {"feedback":self._generate_feedback(workout),"new_prs":prs,"total_workouts":len(self.workouts)}
 
     def _check_prs(self, exercises_data):
-        prs = []
+        prs=[]
         for ex in exercises_data:
-            name = ex.get("name")
+            name=ex.get("name")
             if not name or name not in self.exercise_progress or len(self.exercise_progress[name])<2: continue
-            sets = ex.get("sets",[]); valid = [s for s in sets if isinstance(s,dict) and s.get("weight",0)>0]
+            sets=ex.get("sets",[]); valid=[s for s in sets if isinstance(s,dict) and s.get("weight",0)>0]
             if not valid: continue
-            cur = max(s["weight"]*(1+s["reps"]/30) for s in valid)
-            prev = max(e["estimated_1rm"] for e in self.exercise_progress[name][:-1]) if self.exercise_progress[name][:-1] else 0
+            cur=max(s["weight"]*(1+s["reps"]/30) for s in valid)
+            prev=max(e["estimated_1rm"] for e in self.exercise_progress[name][:-1]) if self.exercise_progress[name][:-1] else 0
             if prev>0 and cur>prev*1.01:
-                imp = round((cur-prev)/prev*100,1)
+                imp=round((cur-prev)/prev*100,1)
                 prs.append({"exercise":name,"old_est_1rm":round(prev,1),"new_est_1rm":round(cur,1),"improvement":imp})
                 self.achievements.append({"type":"PR","exercise":name,"date":datetime.now().isoformat(),"improvement":imp})
-        self._save_json("achievements.json", self.achievements)
+        self._save_json("achievements.json",self.achievements)
         return prs
 
     def _generate_feedback(self, workout):
-        total_vol = sum(sum(s.get("weight",0)*s.get("reps",0) for s in ex.get("sets",[])) for ex in workout["exercises"])
-        fb = []
+        total_vol=sum(sum(s.get("weight",0)*s.get("reps",0) for s in ex.get("sets",[])) for ex in workout["exercises"])
+        fb=[]
         if total_vol>10000: fb.append("Bro, you moved SERIOUS weight! 💪")
         elif total_vol>5000: fb.append("Solid volume! 🏗️")
         else: fb.append("Good work, every rep counts! 🎯")
@@ -206,9 +199,8 @@ Return ONLY a valid JSON object with structure: {{"program_name": "...", "days":
 
     def get_streak_info(self):
         if not self.workouts: return {"current":0,"longest":0,"week":0}
-        wdates = sorted({datetime.fromisoformat(w["date"]).date() for w in self.workouts}, reverse=True)
-        today = date.today()
-        cur=0
+        wdates=sorted({datetime.fromisoformat(w["date"]).date() for w in self.workouts}, reverse=True)
+        today=date.today(); cur=0
         for d in wdates:
             if d==today-timedelta(days=cur): cur+=1
             else: break
@@ -248,16 +240,13 @@ Return ONLY a valid JSON object with structure: {{"program_name": "...", "days":
         return "Learned:\n" + "\n".join(f"- {k['fact']}" for k in self.learned_knowledge[-30:])
 
     def get_workouts_by_month(self, year, month):
-        """Return workouts for a specific month."""
-        result = []
+        result=[]
         for w in self.workouts:
-            d = datetime.fromisoformat(w["date"])
-            if d.year == year and d.month == month:
-                result.append(w)
+            d=datetime.fromisoformat(w["date"])
+            if d.year==year and d.month==month: result.append(w)
         return sorted(result, key=lambda w: w["date"], reverse=True)
 
     def get_all_workout_dates(self):
-        """Return set of dates that have workouts."""
         return {datetime.fromisoformat(w["date"]).date() for w in self.workouts}
 
 # ============================================
@@ -265,8 +254,7 @@ Return ONLY a valid JSON object with structure: {{"program_name": "...", "days":
 # ============================================
 st.set_page_config(page_title="Gym Bro X", page_icon="💎", layout="wide")
 
-if "theme" not in st.session_state:
-    st.session_state.theme = "dark"
+if "theme" not in st.session_state: st.session_state.theme = "dark"
 
 if st.session_state.theme == "dark":
     st.markdown("""
@@ -284,13 +272,12 @@ if st.session_state.theme == "dark":
     .rest-card { background: rgba(255,255,255,0.03); backdrop-filter: blur(15px); border: 1px solid rgba(78,205,196,0.4); border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0; }
     .history-card { background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border: 1px solid rgba(255,107,53,0.3); border-radius: 20px; padding: 1.2rem; margin: 0.5rem 0; transition: all 0.2s; }
     .history-card:hover { border-color: rgba(255,107,53,0.8); box-shadow: 0 0 25px rgba(255,107,53,0.25); }
-    .calendar-day { display: inline-block; width: 38px; height: 38px; line-height: 38px; text-align: center; border-radius: 10px; margin: 2px; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; }
+    .calendar-day { display: inline-block; width: 38px; height: 38px; line-height: 38px; text-align: center; border-radius: 10px; margin: 2px; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; cursor: pointer; }
     .calendar-day.trained { background: rgba(255,107,53,0.8); color: #fff; box-shadow: 0 0 12px rgba(255,107,53,0.5); }
     .calendar-day.today { border: 2px solid #ff6b35; }
     .calendar-day.empty { background: transparent; color: #555; }
     .calendar-day:hover { transform: scale(1.1); }
     .stButton > button { background: linear-gradient(135deg, #ff6b35, #ff8f5e); border: none; color: white; border-radius: 20px; box-shadow: 0 4px 15px rgba(255,107,53,0.4); }
-    .stButton > button:hover { transform: scale(1.02); box-shadow: 0 6px 20px rgba(255,107,53,0.6); }
     .streamlit-expanderHeader { background: rgba(255,255,255,0.05); border-radius: 12px; border: 1px solid rgba(255,107,53,0.3); }
     .chat-container { max-height: calc(100vh - 200px); overflow-y: auto; }
     </style>""", unsafe_allow_html=True)
@@ -308,15 +295,15 @@ else:
     .main .block-container { padding-top: 5rem !important; }
     .program-card { background: rgba(255,255,255,0.9); backdrop-filter: blur(15px); border: 1px solid rgba(255,107,53,0.4); border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0; color: #1a1a2e; }
     .rest-card { background: rgba(255,255,255,0.8); backdrop-filter: blur(15px); border: 1px solid rgba(78,205,196,0.4); border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0; color: #1a1a2e; }
-    .history-card { background: rgba(255,255,255,0.9); backdrop-filter: blur(15px); border: 1px solid rgba(255,107,53,0.3); border-radius: 20px; padding: 1.2rem; margin: 0.5rem 0; transition: all 0.2s; color: #1a1a2e; }
+    .history-card { background: rgba(255,255,255,0.9); backdrop-filter: blur(15px); border: 1px solid rgba(255,107,53,0.3); border-radius: 20px; padding: 1.2rem; margin: 0.5rem 0; color: #1a1a2e; }
     .history-card:hover { border-color: rgba(255,107,53,0.8); box-shadow: 0 0 25px rgba(255,107,53,0.25); }
-    .calendar-day { display: inline-block; width: 38px; height: 38px; line-height: 38px; text-align: center; border-radius: 10px; margin: 2px; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; }
+    .calendar-day { display: inline-block; width: 38px; height: 38px; line-height: 38px; text-align: center; border-radius: 10px; margin: 2px; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; cursor: pointer; }
     .calendar-day.trained { background: rgba(255,107,53,0.8); color: #fff; box-shadow: 0 0 12px rgba(255,107,53,0.5); }
     .calendar-day.today { border: 2px solid #ff6b35; }
     .calendar-day.empty { background: transparent; color: #aaa; }
     .calendar-day:hover { transform: scale(1.1); }
     .stButton > button { background: linear-gradient(135deg, #ff6b35, #ff8f5e); border: none; color: white; border-radius: 20px; box-shadow: 0 4px 15px rgba(255,107,53,0.4); }
-    .stMarkdown, .stText, .stCaption, .stMetric, label, .stSelectbox, .stTextInput, .stNumberInput { color: #1a1a2e !important; }
+    .stMarkdown, .stText, .stCaption, label { color: #1a1a2e !important; }
     input, textarea, select { color: #1a1a2e !important; background: #fff !important; }
     .chat-container { max-height: calc(100vh - 200px); overflow-y: auto; }
     </style>""", unsafe_allow_html=True)
@@ -338,7 +325,7 @@ if not st.session_state.logged_in:
                         st.session_state.selected_user = user; st.session_state.gym_bro = GymBro(user)
                         st.session_state.current_user = user; st.session_state.show_intro = False
                         st.session_state.current_exercises = []; st.session_state.chat_messages = []
-                        st.session_state.logged_in = True; st.session_state.current_page = "👤 Profile"; st.rerun()
+                        st.session_state.logged_in = True; st.session_state.current_page = "📅 Workout Calendar"; st.rerun()
         else: st.info("No users yet. Create your first profile!")
     with col2:
         st.write("### Or create a new user")
@@ -348,8 +335,8 @@ if not st.session_state.logged_in:
                 st.session_state.selected_user = new_user; st.session_state.gym_bro = GymBro(new_user)
                 st.session_state.current_user = new_user; st.session_state.show_intro = True
                 st.session_state.current_exercises = []; st.session_state.chat_messages = []
-                st.session_state.logged_in = True; st.session_state.current_page = "👤 Profile"; st.rerun()
-            elif new_user in get_existing_users(): st.warning("User already exists. Select from the left.")
+                st.session_state.logged_in = True; st.session_state.current_page = "📅 Workout Calendar"; st.rerun()
+            elif new_user in get_existing_users(): st.warning("User already exists.")
     st.stop()
 
 gym_bro = st.session_state.gym_bro
@@ -368,7 +355,7 @@ if not gym_bro.profile:
         st.markdown("---"); st.markdown("### 🏃 Training")
         col1, col2 = st.columns(2)
         with col1: experience = st.selectbox("Experience",["Beginner","Intermediate","Advanced"]); training_days = st.slider("Days/week",1,7,4)
-        with col2: session_length = st.selectbox("Session length",["30 min","45 min","60 min","75 min","90 min"],index=2); include_hr = st.checkbox("I know my resting HR"); resting_hr = None
+        with col2: session_length = st.selectbox("Session length",["30 min","45 min","60 min","75 min","90 min"],index=2); include_hr = st.checkbox("Resting HR"); resting_hr = None
         if include_hr: resting_hr = st.number_input("Resting HR",30,120,60)
         st.markdown("### 🎯 Goals")
         col1, col2 = st.columns(2)
@@ -396,7 +383,7 @@ if not gym_bro.profile:
             st.session_state.show_intro = False; st.rerun()
     st.stop()
 
-if "current_page" not in st.session_state: st.session_state.current_page = "👤 Profile"
+if "current_page" not in st.session_state: st.session_state.current_page = "📅 Workout Calendar"
 
 st.markdown('<div class="fixed-nav">', unsafe_allow_html=True)
 cols = st.columns(5)
@@ -408,6 +395,7 @@ for idx, page_name in enumerate(pages):
 st.markdown('</div>', unsafe_allow_html=True)
 page = st.session_state.current_page
 
+# ---------- Sidebar ----------
 with st.sidebar:
     theme_toggle = st.radio("Theme", ["dark", "light"], horizontal=True, index=0 if st.session_state.theme=="dark" else 1)
     if theme_toggle != st.session_state.theme: st.session_state.theme = theme_toggle; st.rerun()
@@ -419,11 +407,40 @@ with st.sidebar:
         c1,c2,c3 = st.columns(3)
         c1.metric("🔥", streak["current"]); c2.metric("👑", streak["longest"]); c3.metric("📅", f"{streak['week']}/7")
     st.markdown("---")
+    # Profile summary in sidebar
+    if gym_bro.profile:
+        with st.expander("👤 Your Profile", expanded=False):
+            p = gym_bro.profile
+            st.markdown(f"**Age:** {p.get('age','?')}  \n**Height:** {p.get('height','?')} cm  \n**Gender:** {p.get('gender','?')}")
+            w = gym_bro.body_measurements[-1]["weight"] if gym_bro.body_measurements else '?'
+            st.markdown(f"**Weight:** {w} kg  \n**Goal:** {p.get('primary_goal','?')}  \n**Experience:** {p.get('experience','?')}")
+            if st.button("✏️ Edit Profile", key="sidebar_edit"):
+                st.session_state.edit_profile = True
+            if st.session_state.get("edit_profile"):
+                with st.form("sidebar_edit_form"):
+                    age = st.number_input("Age",10,100,p.get("age",25))
+                    gender = st.selectbox("Gender",["Male","Female","Other"],index=["Male","Female","Other"].index(p.get("gender","Male")) if p.get("gender","Male") in ["Male","Female","Other"] else 0)
+                    height = st.number_input("Height (cm)",100,250,p.get("height",175))
+                    w_last = gym_bro.body_measurements[-1]["weight"] if gym_bro.body_measurements else 75.0
+                    bf_last = gym_bro.body_measurements[-1].get("body_fat",0.0) if gym_bro.body_measurements else 0.0
+                    weight = st.number_input("Weight (kg)",30.0,300.0,w_last)
+                    body_fat = st.number_input("Body fat %",0.0,60.0,bf_last,step=0.1)
+                    experience = st.selectbox("Experience",["Beginner","Intermediate","Advanced"],index=["Beginner","Intermediate","Advanced"].index(p.get("experience","Beginner")))
+                    training_days = st.slider("Days/week",1,7,p.get("training_days",4))
+                    session_length = st.selectbox("Session length",["30 min","45 min","60 min","75 min","90 min"],index=["30 min","45 min","60 min","75 min","90 min"].index(p.get("session_length","60 min")))
+                    primary_goal = st.selectbox("Primary goal",["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness"],index=["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness"].index(p.get("primary_goal","Build muscle")))
+                    if st.form_submit_button("💾 Save"):
+                        new_profile = {"age":age,"gender":gender,"height":height,"experience":experience,"training_days":training_days,"session_length":session_length,"primary_goal":primary_goal}
+                        gym_bro.setup_profile(new_profile)
+                        gym_bro.add_body_measurement(weight, body_fat if body_fat>0 else None, "Profile update")
+                        gym_bro.generate_program()
+                        st.session_state.edit_profile = False; st.rerun()
+    st.markdown("---")
     if "delete_mode" not in st.session_state: st.session_state.delete_mode = False
     if not st.session_state.delete_mode:
         if st.button("🗑️ Delete my account"): st.session_state.delete_mode = True; st.rerun()
     else:
-        st.warning(f"Permanently delete **{username}** and all data?")
+        st.warning(f"Delete **{username}** and all data?")
         col1, col2 = st.columns(2)
         with col1:
             if st.button("Yes, delete", type="primary"):
@@ -443,9 +460,9 @@ if page == "👤 Profile":
     with col3: st.markdown(f"**Goal:** {p.get('primary_goal','?')}"); st.markdown(f"**Experience:** {p.get('experience','?')}")
     if st.button("✏️ Edit Full Profile"): st.session_state.edit_profile = True
     if st.session_state.get("edit_profile"):
-        with st.form("edit_profile_form"):
+        with st.form("full_edit_form"):
             age = st.number_input("Age",10,100,p.get("age",25))
-            gender = st.selectbox("Gender",["Male","Female","Other","Prefer not to say"],index=["Male","Female","Other","Prefer not to say"].index(p.get("gender","Male")))
+            gender = st.selectbox("Gender",["Male","Female","Other"],index=["Male","Female","Other"].index(p.get("gender","Male")) if p.get("gender","Male") in ["Male","Female","Other"] else 0)
             height = st.number_input("Height (cm)",100,250,p.get("height",175))
             w_last = gym_bro.body_measurements[-1]["weight"] if gym_bro.body_measurements else 75.0
             bf_last = gym_bro.body_measurements[-1].get("body_fat",0.0) if gym_bro.body_measurements else 0.0
@@ -454,23 +471,9 @@ if page == "👤 Profile":
             experience = st.selectbox("Experience",["Beginner","Intermediate","Advanced"],index=["Beginner","Intermediate","Advanced"].index(p.get("experience","Beginner")))
             training_days = st.slider("Days/week",1,7,p.get("training_days",4))
             session_length = st.selectbox("Session length",["30 min","45 min","60 min","75 min","90 min"],index=["30 min","45 min","60 min","75 min","90 min"].index(p.get("session_length","60 min")))
-            include_hr = st.checkbox("Resting HR",value=bool(p.get("resting_heart_rate"))); resting_hr = None
-            if include_hr: resting_hr = st.number_input("Resting HR",30,120,p.get("resting_heart_rate") or 60)
-            primary_goal = st.selectbox("Primary goal",["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness","Sport-specific","Rehabilitation"],index=["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness","Sport-specific","Rehabilitation"].index(p.get("primary_goal","Build muscle")))
-            target_weight = st.number_input("Target weight",0.0,300.0,p.get("target_weight") or 0.0)
-            strength_goals = st.text_area("Strength goals",value=p.get("strength_goals",""))
-            timeline = st.selectbox("Timeline",["No rush","3 months","6 months","1 year"],index=["No rush","3 months","6 months","1 year"].index(p.get("timeline","No rush")))
-            diet_type = st.selectbox("Diet",["No special","Vegan","Vegetarian","Keto","Paleo","Mediterranean","High protein","IF"],index=["No special","Vegan","Vegetarian","Keto","Paleo","Mediterranean","High protein","IF"].index(p.get("diet_type","No special")))
-            allergies = st.text_input("Allergies",value=p.get("allergies",""))
-            meals_per_day = st.selectbox("Meals/day",[2,3,4,5,6],index=[2,3,4,5,6].index(p.get("meals_per_day",3)))
-            sleep_hours = st.number_input("Sleep (hours)",3.0,12.0,p.get("sleep_hours",7.0),0.5)
-            job_activity = st.selectbox("Activity level",["Sedentary","Lightly active","Moderately active","Very active"],index=["Sedentary","Lightly active","Moderately active","Very active"].index(p.get("job_activity","Sedentary")))
-            stress = st.slider("Stress level",1,10,p.get("stress_level",5))
-            equipment = st.multiselect("Equipment",["Full gym","Barbell","Dumbbells","Cables","Machines","Bodyweight","Bands","Kettlebells","Pull-up bar","Bench","Squat rack"],default=p.get("equipment",["Full gym"]))
-            injuries = st.text_area("Injuries",value=p.get("injuries",""))
-            focus_areas = st.multiselect("Focus areas",["Chest","Back","Legs","Shoulders","Arms","Core","Overall"],default=p.get("focus_areas",["Overall"]))
-            if st.form_submit_button("💾 Save Full Profile"):
-                new_profile = {"age":age,"gender":gender,"height":height,"experience":experience,"training_days":training_days,"session_length":session_length,"resting_heart_rate":resting_hr,"primary_goal":primary_goal,"target_weight":target_weight if target_weight>0 else None,"strength_goals":strength_goals,"timeline":timeline,"diet_type":diet_type,"allergies":allergies,"meals_per_day":meals_per_day,"sleep_hours":sleep_hours,"job_activity":job_activity,"stress_level":stress,"equipment":equipment,"injuries":injuries,"focus_areas":focus_areas}
+            primary_goal = st.selectbox("Primary goal",["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness"],index=["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness"].index(p.get("primary_goal","Build muscle")))
+            if st.form_submit_button("💾 Save"):
+                new_profile = {"age":age,"gender":gender,"height":height,"experience":experience,"training_days":training_days,"session_length":session_length,"primary_goal":primary_goal}
                 gym_bro.setup_profile(new_profile); gym_bro.add_body_measurement(weight, body_fat if body_fat>0 else None, "Profile update"); gym_bro.generate_program(); st.session_state.edit_profile = False; st.rerun()
     if len(gym_bro.body_measurements)>1:
         wd = gym_bro.get_weight_progress()
@@ -538,7 +541,6 @@ elif page == "📊 Progress":
 elif page == "📅 Workout Calendar":
     st.header("📅 Workout Calendar")
     tab1, tab2 = st.tabs(["📋 Current Program", "📜 Full History"])
-    
     with tab1:
         if not gym_bro.current_program:
             st.info("No program generated yet. Ask the AI to create one! 🤖")
@@ -557,7 +559,7 @@ elif page == "📅 Workout Calendar":
                         ex_list += f"<li><strong>{name}</strong> – {sets}×{reps}{note_str}</li>"
                     st.markdown(f'<div class="program-card"><h3>📅 {day} – {d.get("focus","Workout")}</h3><ul>{ex_list}</ul></div>', unsafe_allow_html=True)
                 else:
-                    st.markdown(f'<div class="rest-card"><h3>💤 {day} – Recovery / Rest Day</h3><p>Active recovery, stretching, or complete rest. Your muscles grow when you rest!</p></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="rest-card"><h3>💤 {day} – Recovery / Rest Day</h3><p>Active recovery, stretching, or complete rest.</p></div>', unsafe_allow_html=True)
 
     with tab2:
         if not gym_bro.workouts:
@@ -570,28 +572,20 @@ elif page == "📅 Workout Calendar":
             selected = st.selectbox("Select month", month_options, index=0)
             idx = month_options.index(selected)
             year, month = months[idx]
-
             month_workouts = gym_bro.get_workouts_by_month(year, month)
             total_vol = sum(sum(s.get("weight",0)*s.get("reps",0) for ex in w["exercises"] for s in ex.get("sets",[])) for w in month_workouts)
             c1, c2, c3 = st.columns(3)
             c1.metric("Workouts", len(month_workouts))
             c2.metric("Total Volume", f"{total_vol:,} kg")
             c3.metric("Days Active", len({datetime.fromisoformat(w["date"]).day for w in month_workouts}))
-
             st.markdown("---")
             st.subheader("Monthly Overview")
-            # Calendar grid
-            import calendar
             cal = calendar.monthcalendar(year, month)
             workout_dates = gym_bro.get_all_workout_dates()
-            month_workout_days = {datetime.fromisoformat(w["date"]).day for w in month_workouts}
-            selected_day = st.session_state.get("selected_cal_day", None)
-
             days_header = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
             header_cols = st.columns(7)
             for i, h in enumerate(days_header):
                 with header_cols[i]: st.markdown(f"<small style='color:#888'>{h}</small>", unsafe_allow_html=True)
-
             for week in cal:
                 week_cols = st.columns(7)
                 for i, day_num in enumerate(week):
@@ -605,16 +599,9 @@ elif page == "📅 Workout Calendar":
                             class_str = "calendar-day"
                             if trained: class_str += " trained"
                             if is_today: class_str += " today"
-                            if st.button(str(day_num), key=f"cal_{d}", help=d.strftime("%B %d, %Y")):
-                                st.session_state.selected_cal_day = d.isoformat()
-                                st.rerun()
-                            # Highlight if selected
-                            sel = st.session_state.get("selected_cal_day", "")
-                            if sel == d.isoformat():
-                                st.markdown(f'<div class="{class_str}" style="border: 2px solid #4ecdc4;">{day_num}</div>', unsafe_allow_html=True)
-                            else:
-                                st.markdown(f'<div class="{class_str}">{day_num}</div>', unsafe_allow_html=True)
-
+                            # Make the div clickable via st.markdown with a link that sets session state via query params? Use callback on button with unique key but hidden label.
+                            if st.button(f"{day_num}", key=f"cal_{d}", help=d.strftime("%B %d, %Y"), on_click=lambda d=d: st.session_state.update({"selected_cal_day": d.isoformat()})):
+                                pass
             st.markdown("---")
             if st.session_state.get("selected_cal_day"):
                 sel_date = date.fromisoformat(st.session_state.selected_cal_day)
@@ -632,7 +619,6 @@ elif page == "📅 Workout Calendar":
                     st.info("No workout logged on this day.")
             else:
                 st.info("👆 Click a day above to see workout details.")
-
             st.markdown("---")
             st.subheader(f"All Workouts – {month_names[month-1]} {year}")
             for w in month_workouts:
