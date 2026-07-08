@@ -1,4 +1,4 @@
-# app.py – Gym Bro v8.1 (Profile-aware AI, all fixes, full features)
+# app.py – Gym Bro v8.1 (Fully fixed, profile-aware AI, all features)
 
 import streamlit as st
 import json
@@ -62,7 +62,6 @@ class GymBro:
         return entry
 
     def get_profile_context(self) -> str:
-        """Build a text summary of the user profile for the AI."""
         if not self.profile:
             return "No profile set up yet."
         p = self.profile
@@ -76,7 +75,7 @@ class GymBro:
         if self.body_measurements:
             latest = self.body_measurements[-1]
             lines.append(f"Current weight: {latest['weight']} kg")
-            if latest.get("body_fat"):
+            if latest.get("body_fat") is not None:
                 lines.append(f"Body fat: {latest['body_fat']}%")
         lines.append(f"Experience: {p.get('experience', 'Not set')}")
         lines.append(f"Training days/week: {p.get('training_days', 'Not set')}")
@@ -108,7 +107,6 @@ class GymBro:
         return "\n".join(lines)
 
     def generate_program(self):
-        """Generate a program using AI (with full profile) or offline fallback."""
         if not self.profile:
             return None
         try:
@@ -292,7 +290,6 @@ Consider their experience, equipment, injuries, and goals."""
 
 st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
 
-# Custom CSS
 st.markdown("""
 <style>
     :root {
@@ -416,7 +413,6 @@ with st.sidebar:
             with col3:
                 st.markdown(f'<div class="streak-card"><h3>📅 {streak["weekly_consistency"]}/7</h3><small>This Week</small></div>', unsafe_allow_html=True)
 
-        # Delete user
         if "delete_mode" not in st.session_state:
             st.session_state.delete_mode = False
         if not st.session_state.delete_mode:
@@ -447,10 +443,9 @@ with st.sidebar:
 if not username or not gym_bro:
     st.stop()
 
-# --- Main Content ---
 st.markdown('<div class="hero-box"><h1>🏋️‍♂️ Gym Bro</h1><p>Your AI training partner – fully personalised</p></div>', unsafe_allow_html=True)
 
-# Profile setup wizard (comprehensive, with all fields safe)
+# Profile setup wizard
 if not gym_bro.profile:
     st.subheader("Let's build your profile, bro! 💪")
     st.markdown("The more you tell me, the better I can coach you.")
@@ -627,11 +622,15 @@ with tab0:
         if st.session_state.get("edit_profile"):
             with st.form("edit_profile_form"):
                 st.subheader("Edit Your Profile")
-                # simplified edit – you can expand later
-                weight = st.number_input("Current weight (kg)", 30.0, 300.0,
-                    gym_bro.body_measurements[-1]["weight"] if gym_bro.body_measurements else 75.0)
-                body_fat = st.number_input("Body fat % (optional)", 0.0, 60.0,
-                    gym_bro.body_measurements[-1].get("body_fat", 0.0) if gym_bro.body_measurements else 0.0)
+                if gym_bro.body_measurements:
+                    last_weight = gym_bro.body_measurements[-1]["weight"]
+                    last_bf = gym_bro.body_measurements[-1].get("body_fat")
+                    last_bf = last_bf if last_bf is not None else 0.0
+                else:
+                    last_weight = 75.0
+                    last_bf = 0.0
+                weight = st.number_input("Current weight (kg)", 30.0, 300.0, last_weight)
+                body_fat = st.number_input("Body fat % (optional)", 0.0, 60.0, last_bf, step=0.1)
                 if st.form_submit_button("💾 Save Changes"):
                     gym_bro.add_body_measurement(weight, body_fat if body_fat > 0 else None, "Manual update")
                     gym_bro.profile["last_updated"] = datetime.now().isoformat()
@@ -639,7 +638,6 @@ with tab0:
                     st.session_state.edit_profile = False
                     st.rerun()
 
-        # Weight progress chart
         if len(gym_bro.body_measurements) > 1:
             st.markdown("---")
             st.subheader("📉 Weight Progress")
@@ -654,7 +652,7 @@ with tab0:
                 fig.update_layout(height=300, margin=dict(l=0,r=0,t=0,b=0))
                 st.plotly_chart(fig, use_container_width=True)
 
-# --- TAB 1: CALENDAR (same as before) ---
+# --- TAB 1: CALENDAR ---
 with tab1:
     st.header("Your Training Calendar")
     today = date.today()
@@ -883,7 +881,6 @@ with tab5:
         with st.spinner("Gym Bro is thinking..."):
             try:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                # Build system context: user profile + current program
                 profile_text = gym_bro.get_profile_context()
                 program_text = ""
                 if gym_bro.current_program:
