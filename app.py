@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Landing page, clean UI, full memory AI)
+# app.py – Gym Bro X (Top navigation, delete user, all sections working)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -24,7 +24,7 @@ def delete_user_folder(username):
     return False
 
 # ============================================
-# GYM BRO CLASS (unchanged powerful core)
+# GYM BRO CLASS (full power, memory, learning)
 # ============================================
 class GymBro:
     def __init__(self, username="default"):
@@ -61,6 +61,7 @@ class GymBro:
         path = os.path.join(self.data_dir, filename)
         with open(path, 'w') as f: json.dump(data, f, indent=2, default=str)
 
+    # ---------- Profile ----------
     def setup_profile(self, data):
         self.profile = {**data,
             "created": self.profile.get("created", datetime.now().isoformat()),
@@ -110,6 +111,7 @@ class GymBro:
             lines.append(f"{date}: {exs}")
         return "\n".join(lines)
 
+    # ---------- Program Generation ----------
     def generate_program(self):
         if not self.profile: return None
         try:
@@ -138,6 +140,7 @@ Consider their experience, equipment, injuries, and goals."""
                     self._save_json("current_program.json", prog)
                     return prog
         except: pass
+        # Offline fallback
         days = self.profile.get('training_days', 4)
         days_map = {2: ["Monday","Thursday"], 3: ["Monday","Wednesday","Friday"],
                     4: ["Monday","Tuesday","Thursday","Friday"],
@@ -162,6 +165,7 @@ Consider their experience, equipment, injuries, and goals."""
         self._save_json("current_program.json", program)
         return program
 
+    # ---------- Workout Logging ----------
     def log_workout(self, exercises_data, energy, sleep, duration):
         workout = {
             "date": datetime.now().isoformat(),
@@ -374,7 +378,7 @@ if not gym_bro.profile:
             st.session_state.show_intro = False; st.rerun()
     st.stop()
 
-# ---------- Sidebar ----------
+# ---------- Sidebar (logout, streaks, delete) ----------
 with st.sidebar:
     st.title("Gym Bro X")
     st.markdown(f"Logged in as **{username}**")
@@ -383,7 +387,6 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
-    # Streak info
     if gym_bro.profile:
         streak = gym_bro.get_streak_info()
         c1,c2,c3 = st.columns(3)
@@ -391,23 +394,32 @@ with st.sidebar:
         c2.metric("👑", streak["longest"])
         c3.metric("📅", f"{streak['week']}/7")
 
-    # Quick form check (optional)
-    with st.expander("📸 Form Check"):
-        uploaded = st.file_uploader("Upload image", type=["jpg","jpeg","png"], key="form_upload")
-        if uploaded:
-            st.image(uploaded, use_column_width=True)
-            if st.button("Analyze"):
-                with st.spinner("Analyzing..."):
-                    try:
-                        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                        result = analyze_form(uploaded, client)
-                        st.write(result)
-                    except Exception as e:
-                        st.error(f"Failed: {e}")
-
-    # Navigation
     st.markdown("---")
-    page = st.radio("Navigation", ["👤 Profile", "💪 Log Workout", "📊 Progress", "🎯 My Program", "🤖 AI Chat"])
+    # Delete user button with confirmation
+    if "delete_mode" not in st.session_state:
+        st.session_state.delete_mode = False
+    if not st.session_state.delete_mode:
+        if st.button("🗑️ Delete my account"):
+            st.session_state.delete_mode = True
+            st.rerun()
+    else:
+        st.warning(f"Permanently delete **{username}** and all data? This cannot be undone.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Yes, delete", type="primary"):
+                if delete_user_folder(username):
+                    st.session_state.logged_in = False
+                    st.session_state.delete_mode = False
+                    st.rerun()
+        with col2:
+            if st.button("Cancel"):
+                st.session_state.delete_mode = False
+                st.rerun()
+
+# ---------- Top Navigation ----------
+st.markdown("---")
+page = st.radio("", ["👤 Profile", "💪 Log Workout", "📊 Progress", "🎯 My Program", "🤖 AI Chat"], horizontal=True, label_visibility="collapsed")
+st.markdown("---")
 
 # ---------- Main Content ----------
 if page == "👤 Profile":
@@ -428,8 +440,47 @@ if page == "👤 Profile":
         st.session_state.edit_profile = True
     if st.session_state.get("edit_profile"):
         with st.form("edit_profile_form"):
-            # (full edit form as before, omitted for brevity but identical to previous)
-            pass  # replace with the full edit form from the last working version
+            age = st.number_input("Age",10,100,p.get("age",25))
+            gender = st.selectbox("Gender",["Male","Female","Other","Prefer not to say"],
+                                  index=["Male","Female","Other","Prefer not to say"].index(p.get("gender","Male")))
+            height = st.number_input("Height (cm)",100,250,p.get("height",175))
+            w_last = gym_bro.body_measurements[-1]["weight"] if gym_bro.body_measurements else 75.0
+            bf_last = gym_bro.body_measurements[-1].get("body_fat",0.0) if gym_bro.body_measurements else 0.0
+            weight = st.number_input("Weight (kg)",30.0,300.0,w_last)
+            body_fat = st.number_input("Body fat %",0.0,60.0,bf_last,step=0.1)
+            experience = st.selectbox("Experience",["Beginner","Intermediate","Advanced"],
+                                      index=["Beginner","Intermediate","Advanced"].index(p.get("experience","Beginner")))
+            training_days = st.slider("Days/week",1,7,p.get("training_days",4))
+            session_length = st.selectbox("Session length",["30 min","45 min","60 min","75 min","90 min"],
+                                          index=["30 min","45 min","60 min","75 min","90 min"].index(p.get("session_length","60 min")))
+            include_hr = st.checkbox("Resting HR",value=bool(p.get("resting_heart_rate")))
+            resting_hr = None
+            if include_hr: resting_hr = st.number_input("Resting HR",30,120,p.get("resting_heart_rate") or 60)
+            primary_goal = st.selectbox("Primary goal",["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness","Sport-specific","Rehabilitation"],
+                                        index=["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness","Sport-specific","Rehabilitation"].index(p.get("primary_goal","Build muscle")))
+            target_weight = st.number_input("Target weight",0.0,300.0,p.get("target_weight") or 0.0)
+            strength_goals = st.text_area("Strength goals",value=p.get("strength_goals",""))
+            timeline = st.selectbox("Timeline",["No rush","3 months","6 months","1 year"],
+                                    index=["No rush","3 months","6 months","1 year"].index(p.get("timeline","No rush")))
+            diet_type = st.selectbox("Diet",["No special","Vegan","Vegetarian","Keto","Paleo","Mediterranean","High protein","IF"],
+                                     index=["No special","Vegan","Vegetarian","Keto","Paleo","Mediterranean","High protein","IF"].index(p.get("diet_type","No special")))
+            allergies = st.text_input("Allergies",value=p.get("allergies",""))
+            meals_per_day = st.selectbox("Meals/day",[2,3,4,5,6],index=[2,3,4,5,6].index(p.get("meals_per_day",3)))
+            sleep_hours = st.number_input("Sleep (hours)",3.0,12.0,p.get("sleep_hours",7.0),0.5)
+            job_activity = st.selectbox("Activity level",["Sedentary","Lightly active","Moderately active","Very active"],
+                                        index=["Sedentary","Lightly active","Moderately active","Very active"].index(p.get("job_activity","Sedentary")))
+            stress = st.slider("Stress level",1,10,p.get("stress_level",5))
+            equipment = st.multiselect("Equipment",["Full gym","Barbell","Dumbbells","Cables","Machines","Bodyweight","Bands","Kettlebells","Pull-up bar","Bench","Squat rack"],
+                                       default=p.get("equipment",["Full gym"]))
+            injuries = st.text_area("Injuries",value=p.get("injuries",""))
+            focus_areas = st.multiselect("Focus areas",["Chest","Back","Legs","Shoulders","Arms","Core","Overall"],
+                                         default=p.get("focus_areas",["Overall"]))
+            if st.form_submit_button("💾 Save Full Profile"):
+                new_profile = {"age":age,"gender":gender,"height":height,"experience":experience,"training_days":training_days,"session_length":session_length,"resting_heart_rate":resting_hr,"primary_goal":primary_goal,"target_weight":target_weight if target_weight>0 else None,"strength_goals":strength_goals,"timeline":timeline,"diet_type":diet_type,"allergies":allergies,"meals_per_day":meals_per_day,"sleep_hours":sleep_hours,"job_activity":job_activity,"stress_level":stress,"equipment":equipment,"injuries":injuries,"focus_areas":focus_areas}
+                gym_bro.setup_profile(new_profile)
+                gym_bro.add_body_measurement(weight, body_fat if body_fat>0 else None, "Profile update")
+                gym_bro.generate_program()
+                st.session_state.edit_profile = False; st.rerun()
     if len(gym_bro.body_measurements)>1:
         wd = gym_bro.get_weight_progress()
         if wd:
@@ -441,17 +492,174 @@ if page == "👤 Profile":
             st.plotly_chart(fig, use_container_width=True, key="weight_chart")
 
 elif page == "💪 Log Workout":
-    # (workout logging identical to previous)
-    pass
+    st.header("Log Workout")
+    col1,col2,col3 = st.columns(3)
+    energy = col1.slider("⚡ Energy",1,10,7)
+    sleep = col2.slider("😴 Sleep",1,10,7)
+    duration = col3.number_input("⏱️ Minutes",15,180,45)
+    common_ex = ["Barbell Squat","Deadlift","Bench Press","Overhead Press","Barbell Row","Pull-ups","Lat Pulldowns","Dumbbell Press","Lateral Raises","Bicep Curls","Tricep Pushdowns","Leg Press","Romanian Deadlift","Face Pulls","Planks","Lunges","Calf Raises","Dips","Push-ups"]
+    all_ex = common_ex + gym_bro.custom_exercises
+    mode = st.radio("Select or custom",["📋 List","✏️ Custom"],horizontal=True)
+    if mode.startswith("📋"): ex_name = st.selectbox("Exercise",all_ex)
+    else:
+        ex_name = st.text_input("Exercise name")
+        if ex_name and ex_name not in gym_bro.custom_exercises:
+            if st.button("Save custom"): gym_bro.custom_exercises.append(ex_name); gym_bro._save_json("custom_exercises.json",gym_bro.custom_exercises); st.success(f"Saved {ex_name}!")
+    num_sets = st.selectbox("Sets",[1,2,3,4,5],index=2)
+    sets_data = []
+    w0 = st.number_input("Set 1 Weight (kg)",0.0,500.0,st.session_state.w_0,key="w_0")
+    r0 = st.number_input("Set 1 Reps",1,30,st.session_state.r_0,key="r_0")
+    n0 = st.text_input("Set 1 Notes",st.session_state.n_0,key="n_0")
+    sets_data.append({"weight":w0,"reps":r0,"notes":n0})
+    if num_sets>1:
+        if st.button("⬇️ Apply to all"):
+            for i in range(1,num_sets): st.session_state[f"w_{i}"]=w0; st.session_state[f"r_{i}"]=r0; st.session_state[f"n_{i}"]=n0
+            st.rerun()
+    for i in range(1,num_sets):
+        w = st.number_input(f"Set {i+1} Weight",0.0,500.0,st.session_state[f"w_{i}"],key=f"w_{i}")
+        r = st.number_input(f"Set {i+1} Reps",1,30,st.session_state[f"r_{i}"],key=f"r_{i}")
+        n = st.text_input(f"Set {i+1} Notes",st.session_state[f"n_{i}"],key=f"n_{i}")
+        sets_data.append({"weight":w,"reps":r,"notes":n})
+    if st.button("➕ Add to workout"):
+        st.session_state.current_exercises.append({"name":ex_name,"sets":sets_data})
+        for i in range(5): st.session_state[f"w_{i}"]=20.0; st.session_state[f"r_{i}"]=10; st.session_state[f"n_{i}"]=""
+        st.rerun()
+    if st.session_state.current_exercises:
+        for i,ex in enumerate(st.session_state.current_exercises):
+            st.markdown(f"**{ex['name']}**")
+            for j,s in enumerate(ex["sets"]): st.caption(f"Set {j+1}: {s['weight']}kg × {s['reps']}")
+            if st.button("🗑️",key=f"del_{i}"): st.session_state.current_exercises.pop(i); st.rerun()
+        if st.button("✅ Complete Workout",type="primary"):
+            result = gym_bro.log_workout(st.session_state.current_exercises,energy,sleep,duration)
+            st.session_state.current_exercises = []
+            st.balloons()
+            st.success(result["feedback"])
+            if result["new_prs"]:
+                for pr in result["new_prs"]: st.markdown(f"🏆 {pr['exercise']}: +{pr['improvement']}%")
 
 elif page == "📊 Progress":
-    # (progress charts)
-    pass
+    st.header("Progress")
+    progress = gym_bro.get_progress()
+    if not progress: st.info("Log workouts to see progress!")
+    else:
+        for ex,data in progress.items():
+            with st.expander(f"{ex} ({data['sessions']} sessions)"):
+                c1,c2,c3 = st.columns(3)
+                c1.metric("Best",f"{data['current']}kg")
+                c2.metric("First",f"{data['first']}kg")
+                c3.metric("Change",f"{data['change']}%",data['trend'])
+                if ex in gym_bro.exercise_progress:
+                    hist = gym_bro.exercise_progress[ex]
+                    fig = go.Figure(go.Scatter(x=[h["date"][:10] for h in hist],y=[h["estimated_1rm"] for h in hist],mode='lines+markers'))
+                    fig.update_layout(height=250)
+                    st.plotly_chart(fig, use_container_width=True, key=f"prog_{ex}")
 
 elif page == "🎯 My Program":
-    # (program display + regenerate)
-    pass
+    st.header("My Program")
+    if not gym_bro.current_program:
+        if st.button("Generate Program"): gym_bro.generate_program(); st.rerun()
+    else:
+        prog = gym_bro.current_program
+        st.subheader(prog.get("program_name","Plan"))
+        for d in prog["days"]:
+            with st.expander(f"{d['day']} – {d['focus']}"):
+                for ex in d["exercises"]: st.write(f"• {ex['name']} {ex['sets']}×{ex['reps']} {ex.get('notes','')}")
+        if st.button("🔄 Regenerate"): gym_bro.generate_program(); st.rerun()
 
 elif page == "🤖 AI Chat":
-    # (AI chat with full memory)
-    pass
+    st.header("💬 AI Coach")
+    if "chat_messages" not in st.session_state: st.session_state.chat_messages = []
+    if gym_bro.chat_history and len(st.session_state.chat_messages)==0:
+        for msg in gym_bro.chat_history[-500:]:
+            st.session_state.chat_messages.append({"role":msg["role"],"content":msg["content"]})
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]): st.markdown(msg["content"])
+
+    profile_txt = gym_bro.get_profile_context()
+    recent_wos = gym_bro.get_recent_workouts_context(5)
+    progress_summary = json.dumps(gym_bro.get_progress()) if gym_bro.get_progress() else "None"
+    knowledge = get_knowledge_text()
+    learned = gym_bro.get_learned_knowledge_text()
+
+    system_prompt = f"""You are Gym Bro X, an expert AI coach with full memory. You know the user's entire history and all past conversations.
+
+USER PROFILE:
+{profile_txt}
+
+RECENT WORKOUTS:
+{recent_wos}
+
+STRENGTH PROGRESS:
+{progress_summary}
+
+KNOWLEDGE:
+{knowledge}
+
+{learned}
+
+Tools:
+- search_web(query)
+- create_program(program_json)
+- log_todays_workout(exercises)   <-- each exercise MUST have "name" and "sets" array. Each set must have "weight" (>0), "reps" (>0), optional "notes". Example: [{{"name":"Squat","sets":[{{"weight":100,"reps":5,"notes":""}}]}}]
+- save_learned_knowledge(fact)
+
+Be encouraging, use 'bro' & emojis. Create complete programs. Notice plateaus and suggest changes."""
+
+    functions = [
+        {"name":"create_program","description":"Create/update workout program.","parameters":{"type":"object","properties":{"program_json":{"type":"string","description":"Full program JSON with escaped quotes"}},"required":["program_json"]}},
+        {"name":"log_todays_workout","description":"Log a completed workout.","parameters":{"type":"object","properties":{"exercises":{"type":"string","description":"JSON list of exercises. Each must have name and sets array."}},"required":["exercises"]}},
+        {"name":"search_web","description":"Search the internet.","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}},
+        {"name":"save_learned_knowledge","description":"Save a fact permanently.","parameters":{"type":"object","properties":{"fact":{"type":"string"}},"required":["fact"]}}
+    ]
+
+    if prompt := st.chat_input("Ask anything..."):
+        st.session_state.chat_messages.append({"role":"user","content":prompt})
+        gym_bro.save_chat_message("user",prompt)
+        with st.spinner("Thinking..."):
+            try:
+                client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                messages = [{"role":"system","content":system_prompt}]
+                messages.extend(st.session_state.chat_messages[-60:])
+                response = client.chat.completions.create(
+                    model="gpt-4-turbo", messages=messages, functions=functions,
+                    function_call="auto", temperature=0.8, max_tokens=1000
+                )
+                msg = response.choices[0].message
+                if msg.function_call:
+                    fc = msg.function_call
+                    args = json.loads(fc.arguments)
+                    if fc.name=="create_program":
+                        prog,err = parse_program_payload(args["program_json"])
+                        if prog: gym_bro.current_program = prog; gym_bro._save_json("current_program.json",prog); reply = "✅ Program updated!"
+                        else: reply = f"Error: {err}"
+                    elif fc.name=="log_todays_workout":
+                        try:
+                            raw = args["exercises"]
+                            try: exercises = json.loads(raw)
+                            except: exercises = json.loads(re.sub(r'(?<!\\)"',r'\\"',raw))
+                            if not isinstance(exercises,list): raise ValueError("List required")
+                            clean = []
+                            for ex in exercises:
+                                if not isinstance(ex,dict): continue
+                                name = ex.get("name","Unknown")
+                                sets = ex.get("sets",[])
+                                if not isinstance(sets,list): sets=[]
+                                valid = [s for s in sets if isinstance(s,dict) and s.get("weight",0)>0]
+                                if valid: clean.append({"name":name,"sets":valid})
+                            if not clean: raise ValueError("No valid exercises")
+                            result = gym_bro.log_workout(clean,7,7,60)
+                            reply = f"Workout logged! {result['feedback']}"
+                        except Exception as e: reply = f"Log failed: {e}"
+                    elif fc.name=="search_web":
+                        results = search_exercises(args["query"])
+                        reply = f"Search results:\n{results}"
+                        if results and "Link:" in results: gym_bro.add_learned_knowledge(f"Search '{args['query']}': {results[:200]}")
+                    elif fc.name=="save_learned_knowledge":
+                        gym_bro.add_learned_knowledge(args["fact"])
+                        reply = f"🧠 Learned: {args['fact']}"
+                    else: reply = "Unknown function."
+                else: reply = msg.content
+            except Exception as e: reply = f"Error: {e}"
+        st.session_state.chat_messages.append({"role":"assistant","content":reply})
+        gym_bro.save_chat_message("assistant",reply)
+        st.rerun()
