@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Sticky nav fix + auto-scroll chat)
+# app.py – Gym Bro X (Sticky nav, Dark/Light mode, Ultra-smart AI)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -279,95 +279,107 @@ Consider their experience, equipment, injuries, and goals."""
 # ============================================
 st.set_page_config(page_title="Gym Bro X", page_icon="💎", layout="wide")
 
-# CSS – vibrant, modern, **TRULY** sticky nav + auto-scroll
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
-html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
-.main { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); }
-.stApp { background: transparent; }
-[data-testid="stSidebar"] {
-    background: rgba(15,12,41,0.8); backdrop-filter: blur(20px);
-    border-right: 1px solid rgba(255,255,255,0.1);
-}
+# DARK/LIGHT MODE TOGGLE
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
 
-/* TRULY sticky navigation – pinned to viewport */
-.sticky-nav {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 9999;
-    background: linear-gradient(90deg, #1a1a40, #2d2d6b);
-    padding: 0.6rem 0;
-    border-bottom: 2px solid #ff6b35;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    border-radius: 0 0 20px 20px;
-    margin: 0 auto;
-    max-width: 100%;
-}
-/* Push main content down so it doesn't hide behind the nav */
-.main .block-container {
-    padding-top: 5rem !important;
-}
+def apply_theme():
+    if st.session_state.theme == "dark":
+        st.markdown("""
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+        html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
+        .main { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: #f5f7fb; }
+        .stApp { background: transparent; }
+        [data-testid="stSidebar"] {
+            background: rgba(15,12,41,0.8); backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255,255,255,0.1); color: #f5f7fb;
+        }
+        .sticky-nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+            background: linear-gradient(90deg, #1a1a40, #2d2d6b);
+            padding: 0.6rem 0; border-bottom: 2px solid #ff6b35;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            border-radius: 0 0 20px 20px; margin: 0 auto; max-width: 100%;
+        }
+        .sticky-nav button { font-weight: 600; letter-spacing: 0.5px; color: #f5f7fb; }
+        .program-card {
+            background: linear-gradient(145deg, #1e1e3f, #2a2a5a);
+            border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
+            border-left: 5px solid #ff6b35; box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+        .rest-card {
+            background: linear-gradient(145deg, #1a1a2e, #252545);
+            border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
+            border-left: 5px solid #4ecdc4; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .stButton > button {
+            background: linear-gradient(135deg, #ff6b35, #ff8f5e);
+            border: none; color: white; border-radius: 20px;
+        }
+        .streamlit-expanderHeader {
+            background: rgba(255,255,255,0.05); border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .chat-container {
+            max-height: calc(100vh - 200px); overflow-y: auto;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+        html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
+        .main { background: linear-gradient(135deg, #f0f2f5, #d9e2ec); color: #1a1a2e; }
+        .stApp { background: transparent; }
+        [data-testid="stSidebar"] {
+            background: rgba(255,255,255,0.9); backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(0,0,0,0.1); color: #1a1a2e;
+        }
+        .sticky-nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+            background: linear-gradient(90deg, #4ecdc4, #44a08d);
+            padding: 0.6rem 0; border-bottom: 2px solid #ff6b35;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            border-radius: 0 0 20px 20px; margin: 0 auto; max-width: 100%;
+        }
+        .sticky-nav button { font-weight: 600; letter-spacing: 0.5px; color: #1a1a2e; }
+        .program-card {
+            background: linear-gradient(145deg, #ffffff, #e6e6e6);
+            border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
+            border-left: 5px solid #ff6b35; box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+            color: #1a1a2e;
+        }
+        .rest-card {
+            background: linear-gradient(145deg, #e0f7fa, #b2ebf2);
+            border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
+            border-left: 5px solid #4ecdc4; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            color: #1a1a2e;
+        }
+        .stButton > button {
+            background: linear-gradient(135deg, #ff6b35, #ff8f5e);
+            border: none; color: white; border-radius: 20px;
+        }
+        .streamlit-expanderHeader {
+            background: rgba(0,0,0,0.05); border-radius: 12px;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        .chat-container {
+            max-height: calc(100vh - 200px); overflow-y: auto;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
-.sticky-nav button {
-    font-weight: 600;
-    letter-spacing: 0.5px;
-}
+apply_theme()
 
-/* Cards */
-.program-card {
-    background: linear-gradient(145deg, #1e1e3f, #2a2a5a);
-    border-radius: 20px;
-    padding: 1.5rem;
-    margin: 0.8rem 0;
-    border-left: 5px solid #ff6b35;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-    transition: transform 0.2s;
-}
-.program-card:hover { transform: translateY(-2px); }
-.rest-card {
-    background: linear-gradient(145deg, #1a1a2e, #252545);
-    border-radius: 20px;
-    padding: 1.5rem;
-    margin: 0.8rem 0;
-    border-left: 5px solid #4ecdc4;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    opacity: 0.9;
-}
-
-/* Buttons */
-.stButton > button {
-    background: linear-gradient(135deg, #ff6b35, #ff8f5e);
-    border: none; color: white; border-radius: 20px;
-    padding: 0.6rem 2rem; font-weight: 600; transition: all 0.3s;
-}
-.stButton > button:hover { transform: scale(1.02); box-shadow: 0 8px 25px rgba(255,107,53,0.4); }
-
-/* Expanders */
-.streamlit-expanderHeader {
-    background: rgba(255,255,255,0.05); border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.1);
-}
-
-/* Auto-scroll for chat */
-.chat-container {
-    max-height: calc(100vh - 200px);
-    overflow-y: auto;
-}
-</style>
-
-<script>
-// Auto-scroll to bottom when new message appears
-setTimeout(function() {
-    var chatBox = window.parent.document.querySelector('.chat-container');
-    if (chatBox) {
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-}, 100);
-</script>
-""", unsafe_allow_html=True)
+# Theme toggle in sidebar
+with st.sidebar:
+    st.title("Gym Bro X")
+    theme_toggle = st.radio("Theme", ["dark", "light"], index=0 if st.session_state.theme=="dark" else 1, horizontal=True)
+    if theme_toggle != st.session_state.theme:
+        st.session_state.theme = theme_toggle
+        st.rerun()
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -490,7 +502,6 @@ page = st.session_state.current_page
 
 # ---------- Sidebar ----------
 with st.sidebar:
-    st.title("Gym Bro X")
     st.markdown(f"Logged in as **{username}**")
     if st.button("Logout"):
         st.session_state.logged_in = False
@@ -759,7 +770,7 @@ elif page == "🤖 AI Chat":
     knowledge = get_knowledge_text()
     learned = gym_bro.get_learned_knowledge_text()
 
-    system_prompt = f"""You are Gym Bro X, an expert AI coach with full memory.
+    system_prompt = f"""You are Gym Bro X, a world-class AI fitness coach with deep knowledge of exercise science, biomechanics, nutrition, and program design. You have full access to the user's profile, workout history, and progress. You can also research the internet for the latest information.
 
 USER PROFILE:
 {profile_txt}
@@ -770,22 +781,25 @@ RECENT WORKOUTS:
 STRENGTH PROGRESS:
 {progress_summary}
 
-KNOWLEDGE:
+KNOWLEDGE BASE:
 {knowledge}
 
+LEARNED KNOWLEDGE:
 {learned}
 
-Tools:
-- create_program(program_json)
-- log_todays_workout(exercises)
-- search_web(query)
-- save_learned_knowledge(fact)
+TOOLS:
+- create_program(program_json): Create or update the user's workout plan. The JSON must have "program_name" and "days". Each day has "day", "focus", and "exercises" (list of objects with "name", "sets", "reps", "notes"). ALWAYS use this when the user asks for a program change.
+- log_todays_workout(exercises): Log a completed workout. Pass a JSON array of exercises with "name" and "sets" (each set has "weight", "reps", "notes").
+- search_web(query): Search the internet for exercise tips, studies, or new techniques. Use this proactively when you need more information.
+- save_learned_knowledge(fact): Permanently remember an important fact.
 
-CRITICAL: When the user asks to create or update a workout program, you MUST call the create_program function. The program_json argument must be a valid JSON string containing a JSON object with exactly two keys: "program_name" (string) and "days" (array of objects). Each day object must have "day" (string, e.g. "Monday"), "focus" (string), and "exercises" (array of objects with "name", "sets", "reps", and optional "notes"). DO NOT include any extra text, markdown, or explanations. JUST the JSON inside the function call.
-Example of a valid program_json string:
-{{"program_name":"My Plan","days":[{{"day":"Monday","focus":"Chest","exercises":[{{"name":"Bench Press","sets":3,"reps":"8-10","notes":"control"}}]}}]}}
-
-Now respond to the user."""
+BEHAVIOR:
+- Be encouraging, use 'bro' and emojis.
+- Always personalise your responses based on the user's profile, goals, injuries, and equipment.
+- When asked to create or modify a program, IMMEDIATELY call create_program with the full JSON. Do not ask for confirmation.
+- If you're unsure about an exercise or technique, use search_web to find the best answer.
+- Notice plateaus or lack of progress and suggest changes.
+- The user's current program is shown above. Use it as context."""
 
     functions = [
         {"name": "create_program", "description": "Create/update workout program.", "parameters": {"type": "object", "properties": {"program_json": {"type": "string", "description": "Full program JSON"}}, "required": ["program_json"]}},
@@ -797,7 +811,7 @@ Now respond to the user."""
     if prompt := st.chat_input("Ask anything..."):
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         gym_bro.save_chat_message("user", prompt)
-        with st.spinner("Thinking..."):
+        with st.spinner("Gym Bro is thinking..."):
             try:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                 messages = [{"role": "system", "content": system_prompt}]
