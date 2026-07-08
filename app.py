@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Redesigned light theme, visible scroll button, all features)
+# app.py – Gym Bro X (Visible scroll button, flawless light theme, all features)
 
 import streamlit as st
 import json, random, os, shutil, re, calendar
@@ -280,15 +280,16 @@ if st.session_state.theme == "dark":
     .stButton > button { background: linear-gradient(135deg, #ff6b35, #ff8f5e); border: none; color: white; border-radius: 20px; box-shadow: 0 4px 15px rgba(255,107,53,0.4); }
     .streamlit-expanderHeader { background: rgba(255,255,255,0.05); border-radius: 12px; border: 1px solid rgba(255,107,53,0.3); }
     .chat-container { max-height: calc(100vh - 200px); overflow-y: auto; }
-    .scroll-top-btn { position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; background: #ff6b35; color: white; border: none; border-radius: 50%; width: 48px; height: 48px; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 15px rgba(255,107,53,0.5); display: none; align-items: center; justify-content: center; }
+    .scroll-top-btn { position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; background: #ff6b35; color: white; border: none; border-radius: 50%; width: 48px; height: 48px; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 15px rgba(255,107,53,0.5); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; }
     .scroll-top-btn:hover { background: #ff8f5e; }
+    .scroll-top-btn.visible { opacity: 1; }
     </style>
     <script>
     window.addEventListener('scroll', function() {
         var btn = document.getElementById('scrollTopBtn');
         if (btn) {
-            if (window.scrollY > 300) { btn.style.display = 'flex'; }
-            else { btn.style.display = 'none'; }
+            if (window.scrollY > 300) { btn.classList.add('visible'); }
+            else { btn.classList.remove('visible'); }
         }
     });
     function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }
@@ -312,7 +313,7 @@ else:
     .rest-card h3 { color: #4ecdc4; }
     .history-card { background: #ffffff; border: 1px solid rgba(255,107,53,0.2); border-radius: 20px; padding: 1.2rem; margin: 0.5rem 0; box-shadow: 0 2px 12px rgba(0,0,0,0.04); color: #1a1a2e; }
     .history-card:hover { border-color: rgba(255,107,53,0.6); box-shadow: 0 4px 20px rgba(255,107,53,0.12); }
-    .calendar-day { display: inline-block; width: 38px; height: 38px; line-height: 38px; text-align: center; border-radius: 10px; margin: 2px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+    .calendar-day { display: inline-block; width: 38px; height: 38px; line-height: 38px; text-align: center; border-radius: 10px; margin: 2px; font-weight: 600; font-size: 0.85rem; cursor: pointer; color: #1a1a2e; }
     .calendar-day.trained { background: rgba(255,107,53,0.85); color: #fff; box-shadow: 0 2px 10px rgba(255,107,53,0.3); }
     .calendar-day.today { border: 2px solid #ff6b35; }
     .calendar-day.empty { background: transparent; color: #bbb; }
@@ -324,21 +325,24 @@ else:
     input:focus, textarea:focus, select:focus { border-color: #ff6b35 !important; box-shadow: 0 0 0 2px rgba(255,107,53,0.2) !important; }
     .streamlit-expanderHeader { background: #f8f9fc; border-radius: 12px; border: 1px solid #e0e0e0; color: #1a1a2e !important; }
     .chat-container { max-height: calc(100vh - 200px); overflow-y: auto; position: relative; }
-    .scroll-top-btn { position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; background: linear-gradient(135deg, #ff6b35, #ff8f5e); color: white; border: none; border-radius: 50%; width: 48px; height: 48px; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 20px rgba(255,107,53,0.4); display: none; align-items: center; justify-content: center; transition: all 0.3s; }
+    .scroll-top-btn { position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; background: linear-gradient(135deg, #ff6b35, #ff8f5e); color: white; border: none; border-radius: 50%; width: 48px; height: 48px; font-size: 1.5rem; cursor: pointer; box-shadow: 0 4px 20px rgba(255,107,53,0.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; }
+    .scroll-top-btn.visible { opacity: 1; }
     .scroll-top-btn:hover { transform: scale(1.1); box-shadow: 0 6px 25px rgba(255,107,53,0.6); }
-    .stTabs [data-testid="stTab"] { color: #666; }
+    .stTabs [data-testid="stTab"] { color: #1a1a2e; }
     .stTabs [aria-selected="true"] { color: #ff6b35 !important; font-weight: 700; }
     .stChatMessage { background: #ffffff !important; border: 1px solid #e0e0e0; border-radius: 16px; }
     .stChatMessage [data-testid="stChatMessageContent"] { color: #1a1a2e !important; }
-    [data-testid="stSidebarUserContent"] { background: transparent !important; }
+    [data-testid="stSidebarUserContent"] { background: transparent !important; color: #1a1a2e !important; }
     .st-emotion-cache-1kyxreq { color: #1a1a2e !important; }
+    .stSlider label, .stSelectbox label, .stTextInput label, .stNumberInput label { color: #1a1a2e !important; }
+    .stRadio label { color: #1a1a2e !important; }
     </style>
     <script>
     window.addEventListener('scroll', function() {
         var btn = document.getElementById('scrollTopBtn');
         if (btn) {
-            if (window.scrollY > 300) { btn.style.display = 'flex'; }
-            else { btn.style.display = 'none'; }
+            if (window.scrollY > 300) { btn.classList.add('visible'); }
+            else { btn.classList.remove('visible'); }
         }
     });
     function scrollToTop() { window.scrollTo({top: 0, behavior: 'smooth'}); }
@@ -645,7 +649,7 @@ elif page == "🤖 AI Chat":
             st.markdown(msg["content"])
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Scroll-to-top button (fixed, always rendered)
+    # Scroll-to-top button (always in DOM, visible via JS)
     st.markdown("""
     <button id="scrollTopBtn" class="scroll-top-btn" onclick="scrollToTop()" title="Scroll to top">⬆️</button>
     """, unsafe_allow_html=True)
