@@ -1,4 +1,4 @@
-# app.py – Gym Bro X Final (Complete, robust AI, sticky nav, full edit)
+# app.py – Gym Bro X (safe key access, all features)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -33,7 +33,7 @@ def init_set_state():
                 else: st.session_state[key] = ""
 
 # ============================================
-# GYM BRO CLASS (full power, memory, learning)
+# GYM BRO CLASS (full implementation)
 # ============================================
 class GymBro:
     def __init__(self, username="default"):
@@ -116,7 +116,7 @@ class GymBro:
         lines = []
         for w in recent:
             date = w["date"][:10]
-            exs = ", ".join([f"{e['name']} ({len(e['sets'])}x)" for e in w["exercises"]])
+            exs = ", ".join([f"{e.get('name','?')} ({len(e.get('sets',[]))}x)" for e in w["exercises"]])
             lines.append(f"{date}: {exs}")
         return "\n".join(lines)
 
@@ -397,13 +397,8 @@ if not gym_bro.profile:
 st.markdown("""
 <style>
 .sticky-nav {
-    position: sticky;
-    top: 0;
-    z-index: 9999;
-    background: #0f0c29;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    margin-bottom: 1rem;
+    position: sticky; top: 0; z-index: 9999; background: #0f0c29;
+    padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 1rem;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -566,8 +561,8 @@ elif page == "💪 Log Workout":
         st.rerun()
     if st.session_state.current_exercises:
         for i,ex in enumerate(st.session_state.current_exercises):
-            st.markdown(f"**{ex['name']}**")
-            for j,s in enumerate(ex["sets"]): st.caption(f"Set {j+1}: {s['weight']}kg × {s['reps']}")
+            st.markdown(f"**{ex.get('name','?')}**")
+            for j,s in enumerate(ex.get("sets",[])): st.caption(f"Set {j+1}: {s.get('weight',0)}kg × {s.get('reps',0)}")
             if st.button("🗑️",key=f"del_{i}"): st.session_state.current_exercises.pop(i); st.rerun()
         if st.button("✅ Complete Workout",type="primary"):
             result = gym_bro.log_workout(st.session_state.current_exercises,energy,sleep,duration)
@@ -601,9 +596,17 @@ elif page == "🎯 My Program":
     else:
         prog = gym_bro.current_program
         st.subheader(prog.get("program_name","Plan"))
-        for d in prog["days"]:
-            with st.expander(f"{d['day']} – {d['focus']}"):
-                for ex in d["exercises"]: st.write(f"• {ex['name']} {ex['sets']}×{ex['reps']} {ex.get('notes','')}")
+        for d in prog.get("days", []):
+            day_name = d.get("day", "Unknown")
+            focus = d.get("focus", "General")
+            with st.expander(f"{day_name} – {focus}"):
+                for ex in d.get("exercises", []):
+                    name = ex.get("name", "Exercise")
+                    sets = ex.get("sets", "?")
+                    reps = ex.get("reps", "?")
+                    notes = ex.get("notes", "")
+                    notes_str = f" ({notes})" if notes else ""
+                    st.write(f"• **{name}** – {sets}×{reps}{notes_str}")
         if st.button("🔄 Regenerate"): gym_bro.generate_program(); st.rerun()
 
 elif page == "🤖 AI Chat":
