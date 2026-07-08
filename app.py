@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Profile in sidebar, fixed error, clean UI)
+# app.py – Gym Bro X (Chat fix: instant display, last 15 messages shown)
 
 import streamlit as st
 import json, random, os, shutil, re, calendar
@@ -408,7 +408,6 @@ with st.sidebar:
         c1,c2,c3 = st.columns(3)
         c1.metric("🔥", streak["current"]); c2.metric("👑", streak["longest"]); c3.metric("📅", f"{streak['week']}/7")
     st.markdown("---")
-    # Profile in sidebar
     if gym_bro.profile:
         with st.expander("👤 Your Profile", expanded=False):
             p = gym_bro.profile
@@ -603,14 +602,21 @@ elif page == "🤖 AI Chat":
     if "chat_messages" not in st.session_state: st.session_state.chat_messages = []
     if gym_bro.chat_history and len(st.session_state.chat_messages) == 0:
         for msg in gym_bro.chat_history[-500:]: st.session_state.chat_messages.append({"role": msg["role"], "content": msg["content"]})
+
+    # Display only the last 15 messages
+    visible_messages = st.session_state.chat_messages[-15:]
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-    for msg in st.session_state.chat_messages:
-        with st.chat_message(msg["role"]): st.markdown(msg["content"])
+    for msg in visible_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
     st.markdown('</div>', unsafe_allow_html=True)
+
     profile_txt = gym_bro.get_profile_context()
     recent_wos = gym_bro.get_recent_workouts_context(5)
     progress_summary = json.dumps(gym_bro.get_progress()) if gym_bro.get_progress() else "None"
-    knowledge = get_knowledge_text(); learned = gym_bro.get_learned_knowledge_text()
+    knowledge = get_knowledge_text()
+    learned = gym_bro.get_learned_knowledge_text()
+
     system_prompt = f"""You are Gym Bro X, a world-class AI fitness coach.
 
 USER PROFILE: {profile_txt}
@@ -621,61 +627,116 @@ LEARNED KNOWLEDGE: {learned}
 
 TOOLS: create_program, log_todays_workout, search_web, save_learned_knowledge.
 Be encouraging, use 'bro' and emojis. Personalise everything. Create programs immediately when asked."""
+
     functions = [
         {"name":"create_program","description":"Create/update workout program.","parameters":{"type":"object","properties":{"program_json":{"type":"string"}},"required":["program_json"]}},
         {"name":"log_todays_workout","description":"Log a completed workout.","parameters":{"type":"object","properties":{"exercises":{"type":"string"}},"required":["exercises"]}},
         {"name":"search_web","description":"Search the internet.","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}},
-        {"name":"save_learned_knowledge","description":"Save a fact.","parameters":{"type":"object","properties":{"fact":{"type":"string"}},"required":["fact"]}}]
+        {"name":"save_learned_knowledge","description":"Save a fact.","parameters":{"type":"object","properties":{"fact":{"type":"string"}},"required":["fact"]}}
+    ]
+
     if prompt := st.chat_input("Ask anything..."):
-        st.session_state.chat_messages.append({"role":"user","content":prompt}); gym_bro.save_chat_message("user", prompt)
-        with st.spinner("Thinking..."):
+        # Add user message immediately
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        gym_bro.save_chat_message("user", prompt)
+
+        with st.spinner("Gym Bro is thinking..."):
             try:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                messages = [{"role":"system","content":system_prompt}]; messages.extend(st.session_state.chat_messages[-60:])
-                response = client.chat.completions.create(model="gpt-4-turbo", messages=messages, functions=functions, function_call="auto", temperature=0.8, max_tokens=1500)
+                messages = [{"role": "system", "content": system_prompt}]
+                messages.extend(st.session_state.chat_messages[-60:])
+                response = client.chat.completions.create(
+                    model="gpt-4-turbo", messages=messages, functions=functions,
+                    function_call="auto", temperature=0.8, max_tokens=1500
+                )
                 msg = response.choices[0].message
                 if msg.function_call:
-                    fc = msg.function_call; raw_args = fc.arguments
-                    try: args = json.loads(raw_args)
-                    except:
-                        repaired = re.sub(r'(?<!\\)"', r'\\"', raw_args); repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
-                        try: args = json.loads(repaired)
-                        except: st.session_state.chat_messages.append({"role":"assistant","content":f"Error parsing. Raw: {raw_args[:200]}"}); st.rerun()
+                    fc = msg.function_call
+                    raw_args = fc.arguments
+                    try:
+                        args = json.loads(raw_args)
+                    except json.JSONDecodeError:
+                        repaired = raw_args
+                        repaired = re.sub(r'(?<!\\)"', r'\\"', repaired)
+                        repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
+                        try:
+                            args = json.loads(repaired)
+                        except:
+                            reply = f"Error parsing. Raw: {raw_args[:200]}"
+                            st.session_state.chat_messages.append({"role": "assistant", "content": reply})
+                            gym_bro.save_chat_message("assistant", reply)
+                            st.rerun()
+
                     if fc.name == "create_program":
-                        program_json_str = args.get("program_json","")
-                        if not program_json_str and "program_name" in args: program_json_str = json.dumps(args)
-                        program_json_str = re.sub(r'^```json\s*','',program_json_str); program_json_str = re.sub(r'\s*```$','',program_json_str)
+                        program_json_str = args.get("program_json", "")
+                        if not program_json_str and "program_name" in args:
+                            program_json_str = json.dumps(args)
+                        program_json_str = re.sub(r'^```json\s*', '', program_json_str)
+                        program_json_str = re.sub(r'\s*```$', '', program_json_str)
                         prog, err = parse_program_payload(program_json_str)
-                        if prog: gym_bro.current_program = prog; gym_bro._save_json("current_program.json", prog); reply = "✅ Program updated!"
-                        else: reply = f"Couldn't update: {err}"
+                        if prog:
+                            gym_bro.current_program = prog
+                            gym_bro._save_json("current_program.json", prog)
+                            reply = "✅ Program updated! Check your calendar."
+                        else:
+                            reply = f"Couldn't update program: {err}"
                     elif fc.name == "log_todays_workout":
                         try:
-                            raw = args.get("exercises","[]")
-                            try: exercises = json.loads(raw)
-                            except: exercises = json.loads(re.sub(r'(?<!\\)"',r'\\"',raw))
-                            if not isinstance(exercises,list): raise ValueError("List required")
+                            raw_exercises = args.get("exercises", "[]")
+                            try:
+                                exercises = json.loads(raw_exercises)
+                            except:
+                                exercises = json.loads(re.sub(r'(?<!\\)"', r'\\"', raw_exercises))
+                            if not isinstance(exercises, list):
+                                raise ValueError("List required")
                             clean = []
                             for ex in exercises:
-                                if not isinstance(ex,dict): continue
-                                name = ex.get("name","Unknown"); sets = ex.get("sets",[])
-                                if not isinstance(sets,list): sets=[]
-                                valid = [s for s in sets if isinstance(s,dict) and s.get("weight",0)>0]
-                                if valid: clean.append({"name":name,"sets":valid})
-                            if not clean: raise ValueError("No valid exercises")
-                            result = gym_bro.log_workout(clean,7,7,60); reply = f"Workout logged! {result['feedback']}"
-                        except Exception as e: reply = f"Log failed: {e}"
+                                if not isinstance(ex, dict):
+                                    continue
+                                name = ex.get("name", "Unknown")
+                                sets = ex.get("sets", [])
+                                if not isinstance(sets, list):
+                                    sets = []
+                                valid = [s for s in sets if isinstance(s, dict) and s.get("weight", 0) > 0]
+                                if valid:
+                                    clean.append({"name": name, "sets": valid})
+                            if not clean:
+                                raise ValueError("No valid exercises")
+                            result = gym_bro.log_workout(clean, 7, 7, 60)
+                            reply = f"Workout logged! {result['feedback']}"
+                        except Exception as e:
+                            reply = f"Couldn't log workout: {e}"
                     elif fc.name == "search_web":
-                        results = search_exercises(args.get("query","")); reply = f"Search results:\n{results}"
-                        if results and "Link:" in results: gym_bro.add_learned_knowledge(f"Search: {results[:200]}")
-                    elif fc.name == "save_learned_knowledge": gym_bro.add_learned_knowledge(args.get("fact","")); reply = f"🧠 Learned: {args['fact']}"
-                    else: reply = "Unknown function."
-                    st.session_state.chat_messages.append({"role":"assistant","content":reply}); gym_bro.save_chat_message("assistant", reply)
+                        query = args.get("query", "")
+                        results = search_exercises(query)
+                        reply = f"Search results:\n{results}"
+                        if results and "Link:" in results:
+                            gym_bro.add_learned_knowledge(f"From search '{query}': {results[:200]}")
+                    elif fc.name == "save_learned_knowledge":
+                        gym_bro.add_learned_knowledge(args.get("fact", ""))
+                        reply = f"🧠 Learned: {args['fact']}"
+                    else:
+                        reply = "Unknown function."
                 else:
+                    # Fallback: detect program JSON directly in text
                     prog, _ = parse_program_payload(msg.content)
-                    if prog: gym_bro.current_program = prog; gym_bro._save_json("current_program.json", prog); reply = "✅ Program updated from your message!"
-                    else: reply = msg.content
-                    st.session_state.chat_messages.append({"role":"assistant","content":reply}); gym_bro.save_chat_message("assistant", reply)
-            except Exception as e: st.session_state.chat_messages.append({"role":"assistant","content":f"Error: {e}"}); st.rerun()
+                    if prog:
+                        gym_bro.current_program = prog
+                        gym_bro._save_json("current_program.json", prog)
+                        reply = "✅ Program updated from your message! Check the Calendar."
+                    else:
+                        reply = msg.content
+
+                # Append assistant reply and save
+                st.session_state.chat_messages.append({"role": "assistant", "content": reply})
+                gym_bro.save_chat_message("assistant", reply)
+            except Exception as e:
+                reply = f"Error: {e}"
+                st.session_state.chat_messages.append({"role": "assistant", "content": reply})
+                gym_bro.save_chat_message("assistant", reply)
+
+        # Rerun so the new message displays immediately
+        st.rerun()
 
 st.markdown("---")
 st.caption(f"Gym Bro X | User: {username} | We go jim! 💎")
