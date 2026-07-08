@@ -1,4 +1,4 @@
-# app.py – Gym Bro v9.2 (Safe workout logging, AI instructions, full profile, memory)
+# app.py – Gym Bro v9.3 (max() error completely fixed, safer workout logging)
 
 import streamlit as st
 import json
@@ -43,9 +43,7 @@ class GymBro:
         self.profile = self._load_json("user_profile.json", {})
         self.current_program = self._load_json("current_program.json", None)
         self.body_measurements = self._load_json("body_measurements.json", [])
-        # Long-term memory
         self.chat_history = self._load_json("chat_history.json", [])
-        # Dynamic knowledge learned from research
         self.learned_knowledge = self._load_json("learned_knowledge.json", [])
 
     def _load_json(self, filename, default):
@@ -189,27 +187,29 @@ Consider their experience, equipment, injuries, and goals."""
         }
         self.workouts.append(workout)
         self._save_json("workouts.json", self.workouts)
+
         for ex in exercises_data:
             name = ex.get("name", "Unknown Exercise")
             sets = ex.get("sets", [])
-            if not sets or not isinstance(sets, list):
-                # Skip exercises with no valid sets
+            # Filter only valid set dicts with positive weight/reps
+            valid_sets = [s for s in sets if isinstance(s, dict) and s.get("weight", 0) > 0 and s.get("reps", 0) > 0]
+            if not valid_sets:
+                # Skip exercises with no valid sets – nothing to log
                 continue
+
             if name not in self.exercise_progress:
                 self.exercise_progress[name] = []
-            total_volume = sum(s.get("weight", 0) * s.get("reps", 0) for s in sets if isinstance(s, dict))
-            # Filter valid sets for max calculation
-            valid_sets = [s for s in sets if isinstance(s, dict) and s.get("weight", 0) > 0]
-            if valid_sets:
-                best_set = max(valid_sets, key=lambda s: s.get("weight", 0) * (1 + s.get("reps", 0)/30))
-                estimated_1rm = best_set.get("weight", 0) * (1 + best_set.get("reps", 0)/30)
-            else:
-                estimated_1rm = 0
+
+            total_volume = sum(s.get("weight", 0) * s.get("reps", 0) for s in valid_sets)
+            best_set = max(valid_sets, key=lambda s: s.get("weight", 0) * (1 + s.get("reps", 0)/30))
+            estimated_1rm = best_set.get("weight", 0) * (1 + best_set.get("reps", 0)/30)
+
             self.exercise_progress[name].append({
                 "date": datetime.now().isoformat(),
                 "volume": total_volume,
                 "estimated_1rm": round(estimated_1rm, 1)
             })
+
         self._save_json("progress.json", self.exercise_progress)
         new_prs = self._check_prs(exercises_data)
         return {
@@ -225,9 +225,10 @@ Consider their experience, equipment, injuries, and goals."""
             if not name or name not in self.exercise_progress or len(self.exercise_progress[name]) < 2:
                 continue
             sets = ex.get("sets", [])
-            if not sets:
+            valid_sets = [s for s in sets if isinstance(s, dict) and s.get("weight", 0) > 0]
+            if not valid_sets:
                 continue
-            current = max(s.get("weight", 0) * (1 + s.get("reps", 0)/30) for s in sets if isinstance(s, dict) and s.get("weight", 0) > 0)
+            current = max(s.get("weight", 0) * (1 + s.get("reps", 0)/30) for s in valid_sets)
             previous = max(e["estimated_1rm"] for e in self.exercise_progress[name][:-1]) if self.exercise_progress[name][:-1] else 0
             if previous > 0 and current > previous * 1.01:
                 improvement = round((current - previous)/previous * 100, 1)
@@ -979,7 +980,7 @@ Current Program:
 You can use these tools:
 - search_web(query) – to find the latest exercise science or tips
 - create_program(program_json) – to create or update the user's workout plan
-- log_todays_workout(exercises) – to log a completed workout. The exercises argument MUST be a valid JSON list where each exercise has a "name" and a "sets" array containing objects with "weight", "reps", and optional "notes". All quotes must be properly escaped. Example: [{{\"name\":\"Squat\",\"sets\":[{{\"weight\":100,\"reps\":5,\"notes\":\"\"}}]}}]
+- log_todays_workout(exercises) – to log a completed workout. The exercises argument MUST be a valid JSON list of objects. Each object must have a "name" (string) and a "sets" array. Each set must be an object with "weight" (number, >0), "reps" (number, >0), and optional "notes". All strings must have properly escaped double quotes. Example: [{{\"name\":\"Squat\",\"sets\":[{{\"weight\":100,\"reps\":5,\"notes\":\"felt strong\"}}]}}]
 - save_learned_knowledge(fact) – to store a new fact permanently
 
 Always be encouraging, use 'bro', emojis, and hype. When returning JSON strings, escape double quotes with backslashes. When you learn something useful from a web search or from the user, save it with save_learned_knowledge so you remember it forever. If you don't know something, search the web proactively!"""
@@ -1004,7 +1005,7 @@ Always be encouraging, use 'bro', emojis, and hype. When returning JSON strings,
                 "properties": {
                     "exercises": {
                         "type": "string",
-                        "description": "JSON list of exercises. Each exercise must have a 'name' and a 'sets' array. Example: [{\"name\":\"Squat\",\"sets\":[{\"weight\":100,\"reps\":5,\"notes\":\"\"}]}]"
+                        "description": "JSON list of exercises. Each exercise must have a 'name' and a 'sets' array. Each set must have 'weight' (>0), 'reps' (>0), and optional 'notes'. Example: [{\"name\":\"Squat\",\"sets\":[{\"weight\":100,\"reps\":5,\"notes\":\"\"}]}]"
                     }
                 },
                 "required": ["exercises"]
@@ -1077,7 +1078,7 @@ Always be encouraging, use 'bro', emojis, and hype. When returning JSON strings,
                         elif func_name == "log_todays_workout":
                             try:
                                 raw_exercises = args["exercises"]
-                                # Attempt to load the exercises JSON string
+                                # Parse with repair if needed
                                 try:
                                     exercises = json.loads(raw_exercises)
                                 except json.JSONDecodeError:
@@ -1085,13 +1086,29 @@ Always be encouraging, use 'bro', emojis, and hype. When returning JSON strings,
                                     repaired = re.sub(r'(?<!\\)"', r'\\"', repaired)
                                     repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
                                     exercises = json.loads(repaired)
+
                                 if not isinstance(exercises, list):
                                     raise ValueError("Exercises must be a list")
-                                # Ensure each exercise has a name and sets array
+
+                                # Clean and validate each exercise
+                                clean_exercises = []
                                 for ex in exercises:
-                                    if not isinstance(ex, dict) or "name" not in ex or "sets" not in ex:
-                                        raise ValueError("Each exercise must have 'name' and 'sets'")
-                                result = gym_bro.log_workout(exercises, 7, 7, 60)
+                                    if not isinstance(ex, dict):
+                                        continue
+                                    name = ex.get("name", "Unknown")
+                                    sets = ex.get("sets", [])
+                                    if not isinstance(sets, list):
+                                        sets = []
+                                    # Keep only valid sets
+                                    valid_sets = [s for s in sets if isinstance(s, dict) and s.get("weight", 0) > 0]
+                                    if not valid_sets:
+                                        continue  # skip exercises with no valid sets
+                                    clean_exercises.append({"name": name, "sets": valid_sets})
+
+                                if not clean_exercises:
+                                    raise ValueError("No valid exercises found")
+
+                                result = gym_bro.log_workout(clean_exercises, 7, 7, 60)
                                 reply = f"Workout logged! {result['feedback']}"
                             except Exception as e:
                                 reply = f"Couldn't log workout: {e}"
@@ -1133,4 +1150,4 @@ with tab6:
                     st.error(f"Form analysis failed: {e}")
 
 st.markdown("---")
-st.caption(f"Gym Bro v9.2 | User: {username} | We go jim! 🏋️")
+st.caption(f"Gym Bro v9.3 | User: {username} | We go jim! 🏋️")
