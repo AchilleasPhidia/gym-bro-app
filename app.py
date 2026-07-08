@@ -1,4 +1,4 @@
-# app.py – Gym Bro v8.1 (safe day lookup, all fixes, migration, AI)
+# app.py – Gym Bro v9.0 (Self-learning AI, memory, full profile edit, knowledge base)
 
 import streamlit as st
 import json
@@ -11,9 +11,10 @@ from typing import Dict, List
 import plotly.graph_objects as go
 from openai import OpenAI
 from tools import search_exercises, analyze_form, parse_program_payload, normalize_exercises
+from gym_knowledge import get_knowledge_text
 
 # ============================================
-# GYM BRO CLASS (comprehensive profile + migration)
+# GYM BRO CLASS (with self‑learning and memory)
 # ============================================
 
 class GymBro:
@@ -22,11 +23,12 @@ class GymBro:
         self.data_dir = f"user_data/{username}"
         os.makedirs(self.data_dir, exist_ok=True)
 
-        # Automatic migration of old root-level files
+        # Migration of old root files
         old_files = [
             "workouts.json", "progress.json", "achievements.json",
             "custom_exercises.json", "user_profile.json",
-            "current_program.json", "body_measurements.json"
+            "current_program.json", "body_measurements.json",
+            "chat_history.json", "learned_knowledge.json"
         ]
         for fname in old_files:
             old_path = fname
@@ -41,6 +43,10 @@ class GymBro:
         self.profile = self._load_json("user_profile.json", {})
         self.current_program = self._load_json("current_program.json", None)
         self.body_measurements = self._load_json("body_measurements.json", [])
+        # Long-term memory
+        self.chat_history = self._load_json("chat_history.json", [])
+        # Dynamic knowledge learned from research
+        self.learned_knowledge = self._load_json("learned_knowledge.json", [])
 
     def _load_json(self, filename, default):
         path = os.path.join(self.data_dir, filename)
@@ -64,15 +70,9 @@ class GymBro:
         self._save_json("user_profile.json", self.profile)
 
     def add_body_measurement(self, weight, body_fat=None, notes=""):
-        entry = {
-            "date": datetime.now().isoformat(),
-            "weight": weight,
-            "body_fat": body_fat,
-            "notes": notes
-        }
+        entry = {"date": datetime.now().isoformat(), "weight": weight, "body_fat": body_fat, "notes": notes}
         self.body_measurements.append(entry)
         self._save_json("body_measurements.json", self.body_measurements)
-        return entry
 
     def get_profile_context(self) -> str:
         if not self.profile:
@@ -122,15 +122,21 @@ class GymBro:
     def generate_program(self):
         if not self.profile:
             return None
+        # Try OpenAI with full context
         try:
             from openai import OpenAI
             if "OPENAI_API_KEY" in st.secrets:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                 profile_text = self.get_profile_context()
-                prompt = f"""Create a {self.profile.get('training_days', 4)}-day gym workout plan based on this user profile:
+                knowledge_text = get_knowledge_text()
+                prompt = f"""Create a {self.profile.get('training_days', 4)}-day gym workout plan based on this user profile and knowledge base.
+Profile:
 {profile_text}
-Return ONLY a valid JSON object with this structure:
-{{"program_name": "string", "days": [{{"day": "Monday", "focus": "string", "exercises": [{{"name": "string", "sets": 3, "reps": "8-10", "notes": "string"}}]}}]}}
+
+Knowledge base:
+{knowledge_text}
+
+Return ONLY a valid JSON object with structure: {{"program_name": "...", "days": [{{"day": "Monday", "focus": "...", "exercises": [{{"name": "...", "sets": 3, "reps": "8-10", "notes": "..."}}]}}]}}
 Consider their experience, equipment, injuries, and goals."""
                 response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
@@ -145,7 +151,7 @@ Consider their experience, equipment, injuries, and goals."""
                     return prog
         except:
             pass
-        # Offline fallback
+        # Offline fallback (same as before)
         days = self.profile.get('training_days', 4)
         days_map = {2: ["Monday", "Thursday"], 3: ["Monday", "Wednesday", "Friday"],
                     4: ["Monday", "Tuesday", "Thursday", "Friday"],
@@ -296,6 +302,19 @@ Consider their experience, equipment, injuries, and goals."""
             "weights": [m["weight"] for m in self.body_measurements],
             "body_fats": [m.get("body_fat") for m in self.body_measurements]
         }
+
+    def save_chat_message(self, role, content):
+        self.chat_history.append({"role": role, "content": content, "timestamp": datetime.now().isoformat()})
+        self._save_json("chat_history.json", self.chat_history)
+
+    def add_learned_knowledge(self, fact: str):
+        self.learned_knowledge.append({"fact": fact, "timestamp": datetime.now().isoformat()})
+        self._save_json("learned_knowledge.json", self.learned_knowledge)
+
+    def get_learned_knowledge_text(self) -> str:
+        if not self.learned_knowledge:
+            return ""
+        return "Learned knowledge:\n" + "\n".join([f"- {k['fact']}" for k in self.learned_knowledge[-20:]])
 
 # ============================================
 # STREAMLIT UI
@@ -456,7 +475,7 @@ with st.sidebar:
 if not username or not gym_bro:
     st.stop()
 
-st.markdown('<div class="hero-box"><h1>🏋️‍♂️ Gym Bro</h1><p>Your AI training partner – fully personalised</p></div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-box"><h1>🏋️‍♂️ Gym Bro</h1><p>Your self‑learning AI coach</p></div>', unsafe_allow_html=True)
 
 # Profile setup wizard
 if not gym_bro.profile:
@@ -581,7 +600,7 @@ tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📊 Progress", "🎯 My Program", "🤖 AI Chat", "📸 Form Check"
 ])
 
-# --- TAB 0: PROFILE ---
+# --- TAB 0: PROFILE (fully editable) ---
 with tab0:
     st.header("Your Profile")
     if not gym_bro.profile:
@@ -629,25 +648,88 @@ with tab0:
                        f'Injuries: {p.get("injuries", "None")}</p></div>',
                        unsafe_allow_html=True)
 
-        if st.button("✏️ Edit Profile"):
+        if st.button("✏️ Edit Full Profile"):
             st.session_state.edit_profile = True
 
         if st.session_state.get("edit_profile"):
-            with st.form("edit_profile_form"):
-                st.subheader("Edit Your Profile")
+            with st.form("full_profile_edit"):
+                st.subheader("Edit Your Full Profile")
+                # Pre-fill all fields with current values
+                age = st.number_input("Age", 10, 100, p.get("age", 25))
+                gender = st.selectbox("Gender", ["Male", "Female", "Other", "Prefer not to say"],
+                                      index=["Male","Female","Other","Prefer not to say"].index(p.get("gender","Male")))
+                height = st.number_input("Height (cm)", 100, 250, p.get("height", 175))
+                # Weight and body fat are handled via measurements, but we can show the latest
                 if gym_bro.body_measurements:
-                    last_weight = gym_bro.body_measurements[-1]["weight"]
-                    last_bf = gym_bro.body_measurements[-1].get("body_fat")
-                    last_bf = last_bf if last_bf is not None else 0.0
+                    latest_weight = gym_bro.body_measurements[-1]["weight"]
+                    latest_bf = gym_bro.body_measurements[-1].get("body_fat") or 0.0
                 else:
-                    last_weight = 75.0
-                    last_bf = 0.0
-                weight = st.number_input("Current weight (kg)", 30.0, 300.0, last_weight)
-                body_fat = st.number_input("Body fat % (optional)", 0.0, 60.0, last_bf, step=0.1)
-                if st.form_submit_button("💾 Save Changes"):
-                    gym_bro.add_body_measurement(weight, body_fat if body_fat > 0 else None, "Manual update")
-                    gym_bro.profile["last_updated"] = datetime.now().isoformat()
-                    gym_bro._save_json("user_profile.json", gym_bro.profile)
+                    latest_weight = 75.0
+                    latest_bf = 0.0
+                weight = st.number_input("Current weight (kg)", 30.0, 300.0, latest_weight)
+                body_fat = st.number_input("Body fat % (optional)", 0.0, 60.0, latest_bf, step=0.1)
+
+                experience = st.selectbox("Experience level", ["Beginner", "Intermediate", "Advanced"],
+                                          index=["Beginner","Intermediate","Advanced"].index(p.get("experience","Beginner")))
+                training_days = st.slider("Training days per week", 1, 7, p.get("training_days", 4))
+                session_length = st.selectbox("Session length", ["30 min", "45 min", "60 min", "75 min", "90 min"],
+                                              index=["30 min","45 min","60 min","75 min","90 min"].index(p.get("session_length","60 min")))
+                include_hr = st.checkbox("I know my resting heart rate", value=bool(p.get("resting_heart_rate")))
+                resting_hr = None
+                if include_hr:
+                    resting_hr = st.number_input("Resting heart rate (bpm)", 30, 120, p.get("resting_heart_rate") or 60)
+
+                primary_goal = st.selectbox("Primary goal", [
+                    "Build muscle", "Lose fat", "Get stronger", 
+                    "Improve endurance", "Tone up", "General fitness",
+                    "Sport-specific performance", "Rehabilitation"
+                ], index=["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness","Sport-specific performance","Rehabilitation"].index(p.get("primary_goal","Build muscle")))
+                target_weight = st.number_input("Target weight (kg, optional)", 0.0, 300.0, p.get("target_weight") or 0.0)
+                strength_goals = st.text_area("Specific strength goals", value=p.get("strength_goals") or "")
+                timeline = st.selectbox("Goal timeline", ["No rush", "3 months", "6 months", "1 year"],
+                                        index=["No rush","3 months","6 months","1 year"].index(p.get("timeline","No rush")))
+
+                diet_type = st.selectbox("Diet type", ["No special diet", "Vegan", "Vegetarian", "Keto", "Paleo", "Mediterranean", "High protein", "Intermittent fasting"],
+                                         index=["No special diet","Vegan","Vegetarian","Keto","Paleo","Mediterranean","High protein","Intermittent fasting"].index(p.get("diet_type","No special diet")))
+                allergies = st.text_input("Food allergies/restrictions", value=p.get("allergies") or "")
+                meals_per_day = st.selectbox("Meals per day", [2,3,4,5,6], index=[2,3,4,5,6].index(p.get("meals_per_day",3)))
+
+                sleep_hours = st.number_input("Avg sleep (hours)", 3.0, 12.0, p.get("sleep_hours", 7.0), 0.5)
+                job_activity = st.selectbox("Daily activity level", ["Sedentary (desk job)", "Lightly active", "Moderately active", "Very active (physical job)"],
+                                            index=["Sedentary (desk job)","Lightly active","Moderately active","Very active (physical job)"].index(p.get("job_activity","Sedentary (desk job)")))
+                stress_level = st.slider("Stress level", 1, 10, p.get("stress_level", 5))
+
+                equipment = st.multiselect("Available equipment", [
+                    "Full gym", "Barbell", "Dumbbells", "Cables", "Machines",
+                    "Bodyweight only", "Resistance bands", "Kettlebells",
+                    "Pull-up bar", "Bench", "Squat rack"
+                ], default=p.get("equipment", ["Full gym"]))
+                injuries = st.text_area("Injuries / limitations", value=p.get("injuries") or "")
+                focus_areas = st.multiselect("Areas to focus on", [
+                    "Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Overall"
+                ], default=p.get("focus_areas", ["Overall"]))
+
+                if st.form_submit_button("💾 Save Full Profile", type="primary"):
+                    new_profile = {
+                        "age": age, "gender": gender, "height": height,
+                        "experience": experience, "training_days": training_days,
+                        "session_length": session_length, "resting_heart_rate": resting_hr,
+                        "primary_goal": primary_goal,
+                        "target_weight": target_weight if target_weight > 0 else None,
+                        "strength_goals": strength_goals if strength_goals else None,
+                        "timeline": timeline,
+                        "diet_type": diet_type,
+                        "allergies": allergies if allergies else None,
+                        "meals_per_day": meals_per_day,
+                        "sleep_hours": sleep_hours, "job_activity": job_activity,
+                        "stress_level": stress_level,
+                        "equipment": equipment,
+                        "injuries": injuries if injuries else None,
+                        "focus_areas": focus_areas
+                    }
+                    gym_bro.setup_profile(new_profile)
+                    gym_bro.add_body_measurement(weight, body_fat if body_fat > 0 else None, "Profile update")
+                    gym_bro.generate_program()
                     st.session_state.edit_profile = False
                     st.rerun()
 
@@ -665,7 +747,7 @@ with tab0:
                 fig.update_layout(height=300, margin=dict(l=0,r=0,t=0,b=0))
                 st.plotly_chart(fig, use_container_width=True, key="weight_progress_chart")
 
-# --- TAB 1: CALENDAR ---
+# --- TAB 1: CALENDAR (with safe day lookup) ---
 with tab1:
     st.header("Your Training Calendar")
     today = date.today()
@@ -800,7 +882,7 @@ with tab2:
                     for pr in result["new_prs"]:
                         st.markdown(f'<div class="pr-badge">{pr["exercise"]}: +{pr["improvement"]}%</div>', unsafe_allow_html=True)
 
-# --- TAB 3: PROGRESS (fixed duplicate chart key) ---
+# --- TAB 3: PROGRESS (fixed duplicate chart keys) ---
 with tab3:
     st.header("Your Progress")
     progress = gym_bro.get_progress()
@@ -847,14 +929,47 @@ with tab4:
             gym_bro.generate_program()
             st.rerun()
 
-# --- TAB 5: AI CHAT (profile-aware, with function calling) ---
+# --- TAB 5: AI CHAT (self‑learning, memory, knowledge) ---
 with tab5:
     st.header("💬 Chat with Gym Bro AI")
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
+        # Load last 10 messages from saved history
+        if gym_bro.chat_history:
+            for msg in gym_bro.chat_history[-10:]:
+                st.session_state.chat_messages.append({"role": msg["role"], "content": msg["content"]})
+
     for msg in st.session_state.chat_messages:
         with st.chat_message(msg["role"], avatar="💪" if msg["role"]=="assistant" else None):
             st.markdown(msg["content"])
+
+    # Build knowledge-rich system prompt
+    base_knowledge = get_knowledge_text()
+    learned = gym_bro.get_learned_knowledge_text()
+    profile_text = gym_bro.get_profile_context()
+    program_text = json.dumps(gym_bro.current_program) if gym_bro.current_program else "None"
+
+    system_prompt = f"""You are Gym Bro, an elite AI gym coach with encyclopedic knowledge of exercises, biomechanics, program design, and nutrition.
+You have access to a knowledge base, the user's profile, their current program, and you can research new information on the web.
+
+Knowledge base:
+{base_knowledge}
+
+{learned}
+
+User Profile:
+{profile_text}
+
+Current Program:
+{program_text}
+
+You can use these tools:
+- search_web(query) – to find the latest exercise science or tips
+- create_program(program_json) – to create or update the user's workout plan
+- log_todays_workout(exercises) – to log a completed workout
+- save_learned_knowledge(fact) – to store a new fact permanently
+
+Always be encouraging, use 'bro', emojis, and hype. When you learn something useful from a web search or from the user, save it with save_learned_knowledge so you remember it forever. If you don't know something, search the web proactively!"""
 
     functions = [
         {
@@ -889,25 +1004,30 @@ with tab5:
                 },
                 "required": ["query"]
             }
+        },
+        {
+            "name": "save_learned_knowledge",
+            "description": "Save a new fact or piece of information into long-term memory.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "fact": {"type": "string", "description": "The fact to remember, e.g. 'New study shows drop sets increase hypertrophy by 20%'"}
+                },
+                "required": ["fact"]
+            }
         }
     ]
 
     if prompt := st.chat_input("Ask Gym Bro..."):
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        gym_bro.save_chat_message("user", prompt)
+
         with st.spinner("Gym Bro is thinking..."):
             try:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                profile_text = gym_bro.get_profile_context()
-                program_text = ""
-                if gym_bro.current_program:
-                    program_text = f"Current program: {json.dumps(gym_bro.current_program)}"
-                system_context = (
-                    f"You are Gym Bro, a highly personalised gym coach. Here is the user's profile:\n{profile_text}\n\n"
-                    f"{program_text}\n\n"
-                    "Use this information to give tailored advice. When returning JSON strings, escape double quotes with backslashes."
-                )
-                messages = [{"role": "system", "content": system_context}]
-                messages.extend(st.session_state.chat_messages[-6:])
+                messages = [{"role": "system", "content": system_prompt}]
+                messages.extend(st.session_state.chat_messages[-6:])  # last 6 for immediate context
+
                 response = client.chat.completions.create(
                     model="gpt-4-turbo",
                     messages=messages,
@@ -950,18 +1070,27 @@ with tab5:
                         elif func_name == "search_web":
                             results = search_exercises(args["query"])
                             reply = f"Search results:\n{results}"
+                            # Optionally auto-learn the top result
+                            if results and "Link:" in results:
+                                gym_bro.add_learned_knowledge(f"From web search '{args['query']}': {results[:200]}")
+                        elif func_name == "save_learned_knowledge":
+                            gym_bro.add_learned_knowledge(args["fact"])
+                            reply = f"🧠 Learned and saved: {args['fact']}"
                         else:
                             reply = "Function not implemented."
                         st.session_state.chat_messages.append({"role": "assistant", "content": reply})
+                        gym_bro.save_chat_message("assistant", reply)
                     else:
                         st.session_state.chat_messages.append({"role": "assistant", "content": "Error: Could not parse function arguments."})
                 else:
-                    st.session_state.chat_messages.append({"role": "assistant", "content": reply_msg.content})
+                    reply = reply_msg.content
+                    st.session_state.chat_messages.append({"role": "assistant", "content": reply})
+                    gym_bro.save_chat_message("assistant", reply)
             except Exception as e:
                 st.session_state.chat_messages.append({"role": "assistant", "content": f"Error: {e}"})
             st.rerun()
 
-# --- TAB 6: FORM CHECK ---
+# --- TAB 6: FORM CHECK (unchanged) ---
 with tab6:
     st.header("📸 Upload a photo of your form")
     uploaded_file = st.file_uploader("Choose an image", type=["jpg", "jpeg", "png"])
@@ -977,4 +1106,4 @@ with tab6:
                     st.error(f"Form analysis failed: {e}")
 
 st.markdown("---")
-st.caption(f"Gym Bro v8.1 | User: {username} | We go jim! 🏋️")
+st.caption(f"Gym Bro v9.0 | User: {username} | We go jim! 🏋️")
