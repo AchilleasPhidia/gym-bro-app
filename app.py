@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Complete, no placeholders, full AI memory, luxury UI)
+# app.py – Gym Bro X (Final, error‑free, full memory, beautiful UI)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -32,6 +32,7 @@ class GymBro:
         self.data_dir = f"user_data/{username}"
         os.makedirs(self.data_dir, exist_ok=True)
 
+        # Migrate old files
         for fname in ["workouts.json","progress.json","achievements.json",
                       "custom_exercises.json","user_profile.json",
                       "current_program.json","body_measurements.json",
@@ -61,6 +62,7 @@ class GymBro:
         path = os.path.join(self.data_dir, filename)
         with open(path, 'w') as f: json.dump(data, f, indent=2, default=str)
 
+    # ---------- Profile ----------
     def setup_profile(self, data):
         self.profile = {**data,
             "created": self.profile.get("created", datetime.now().isoformat()),
@@ -110,6 +112,7 @@ class GymBro:
             lines.append(f"{date}: {exs}")
         return "\n".join(lines)
 
+    # ---------- Program Generation ----------
     def generate_program(self):
         if not self.profile: return None
         try:
@@ -138,6 +141,7 @@ Consider their experience, equipment, injuries, and goals."""
                     self._save_json("current_program.json", prog)
                     return prog
         except: pass
+        # Offline fallback
         days = self.profile.get('training_days', 4)
         days_map = {2: ["Monday","Thursday"], 3: ["Monday","Wednesday","Friday"],
                     4: ["Monday","Tuesday","Thursday","Friday"],
@@ -162,6 +166,7 @@ Consider their experience, equipment, injuries, and goals."""
         self._save_json("current_program.json", program)
         return program
 
+    # ---------- Workout Logging ----------
     def log_workout(self, exercises_data, energy, sleep, duration):
         workout = {
             "date": datetime.now().isoformat(),
@@ -256,10 +261,10 @@ Consider their experience, equipment, injuries, and goals."""
                 "weights":[m["weight"] for m in self.body_measurements],
                 "body_fats":[m.get("body_fat") for m in self.body_measurements]}
 
+    # ---------- Memory ----------
     def save_chat_message(self, role, content):
         self.chat_history.append({"role":role,"content":content,"timestamp":datetime.now().isoformat()})
-        if len(self.chat_history) > 500:
-            self.chat_history = self.chat_history[-500:]
+        # Keep full history – no limit
         self._save_json("chat_history.json", self.chat_history)
 
     def add_learned_knowledge(self, fact):
@@ -268,7 +273,7 @@ Consider their experience, equipment, injuries, and goals."""
 
     def get_learned_knowledge_text(self):
         if not self.learned_knowledge: return ""
-        return "Learned knowledge:\n" + "\n".join(f"- {k['fact']}" for k in self.learned_knowledge[-30:])
+        return "Learned:\n" + "\n".join(f"- {k['fact']}" for k in self.learned_knowledge[-30:])
 
 # ============================================
 # STREAMLIT UI
@@ -436,17 +441,40 @@ if page == "👤 Profile":
     with col1: st.markdown(f"**Age:** {p.get('age','?')}"), st.markdown(f"**Height:** {p.get('height','?')} cm")
     with col2: st.markdown(f"**Gender:** {p.get('gender','?')}"), st.markdown(f"**Weight:** {gym_bro.body_measurements[-1]['weight'] if gym_bro.body_measurements else '?'} kg")
     with col3: st.markdown(f"**Goal:** {p.get('primary_goal','?')}"), st.markdown(f"**Experience:** {p.get('experience','?')}")
-    if st.button("✏️ Edit Profile"):
+    if st.button("✏️ Edit Full Profile"):
         st.session_state.edit_profile = True
     if st.session_state.get("edit_profile"):
         with st.form("edit_profile_form"):
-            # simplified edit (weight & body fat only)
+            # Rebuild the full form, pre-filled
+            age = st.number_input("Age",10,100,p.get("age",25))
+            gender = st.selectbox("Gender",["Male","Female","Other","Prefer not to say"],index=["Male","Female","Other","Prefer not to say"].index(p.get("gender","Male")))
+            height = st.number_input("Height (cm)",100,250,p.get("height",175))
             weight = st.number_input("Weight (kg)",30.0,300.0,gym_bro.body_measurements[-1]["weight"] if gym_bro.body_measurements else 75.0)
             body_fat = st.number_input("Body fat %",0.0,60.0,gym_bro.body_measurements[-1].get("body_fat",0.0) if gym_bro.body_measurements else 0.0,step=0.1)
-            if st.form_submit_button("Save"):
-                gym_bro.add_body_measurement(weight, body_fat if body_fat>0 else None, "Manual update")
-                gym_bro.profile["last_updated"] = datetime.now().isoformat()
-                gym_bro._save_json("user_profile.json", gym_bro.profile)
+            experience = st.selectbox("Experience",["Beginner","Intermediate","Advanced"],index=["Beginner","Intermediate","Advanced"].index(p.get("experience","Beginner")))
+            training_days = st.slider("Days/week",1,7,p.get("training_days",4))
+            session_length = st.selectbox("Session length",["30 min","45 min","60 min","75 min","90 min"],index=["30 min","45 min","60 min","75 min","90 min"].index(p.get("session_length","60 min")))
+            include_hr = st.checkbox("Resting HR",value=bool(p.get("resting_heart_rate")))
+            resting_hr = None
+            if include_hr: resting_hr = st.number_input("Resting HR",30,120,p.get("resting_heart_rate") or 60)
+            primary_goal = st.selectbox("Primary goal",["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness","Sport-specific","Rehabilitation"],index=["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness","Sport-specific","Rehabilitation"].index(p.get("primary_goal","Build muscle")))
+            target_weight = st.number_input("Target weight",0.0,300.0,p.get("target_weight") or 0.0)
+            strength_goals = st.text_area("Strength goals",value=p.get("strength_goals",""))
+            timeline = st.selectbox("Timeline",["No rush","3 months","6 months","1 year"],index=["No rush","3 months","6 months","1 year"].index(p.get("timeline","No rush")))
+            diet_type = st.selectbox("Diet",["No special","Vegan","Vegetarian","Keto","Paleo","Mediterranean","High protein","IF"],index=["No special","Vegan","Vegetarian","Keto","Paleo","Mediterranean","High protein","IF"].index(p.get("diet_type","No special")))
+            allergies = st.text_input("Allergies",value=p.get("allergies",""))
+            meals_per_day = st.selectbox("Meals/day",[2,3,4,5,6],index=[2,3,4,5,6].index(p.get("meals_per_day",3)))
+            sleep_hours = st.number_input("Sleep (hours)",3.0,12.0,p.get("sleep_hours",7.0),0.5)
+            job_activity = st.selectbox("Activity level",["Sedentary","Lightly active","Moderately active","Very active"],index=["Sedentary","Lightly active","Moderately active","Very active"].index(p.get("job_activity","Sedentary")))
+            stress = st.slider("Stress level",1,10,p.get("stress_level",5))
+            equipment = st.multiselect("Equipment",["Full gym","Barbell","Dumbbells","Cables","Machines","Bodyweight","Bands","Kettlebells","Pull-up bar","Bench","Squat rack"],default=p.get("equipment",["Full gym"]))
+            injuries = st.text_area("Injuries",value=p.get("injuries",""))
+            focus_areas = st.multiselect("Focus areas",["Chest","Back","Legs","Shoulders","Arms","Core","Overall"],default=p.get("focus_areas",["Overall"]))
+            if st.form_submit_button("💾 Save Full Profile"):
+                new_profile = {"age":age,"gender":gender,"height":height,"experience":experience,"training_days":training_days,"session_length":session_length,"resting_heart_rate":resting_hr,"primary_goal":primary_goal,"target_weight":target_weight if target_weight>0 else None,"strength_goals":strength_goals,"timeline":timeline,"diet_type":diet_type,"allergies":allergies,"meals_per_day":meals_per_day,"sleep_hours":sleep_hours,"job_activity":job_activity,"stress_level":stress,"equipment":equipment,"injuries":injuries,"focus_areas":focus_areas}
+                gym_bro.setup_profile(new_profile)
+                gym_bro.add_body_measurement(weight, body_fat if body_fat>0 else None, "Profile update")
+                gym_bro.generate_program()
                 st.session_state.edit_profile = False; st.rerun()
     if len(gym_bro.body_measurements)>1:
         wd = gym_bro.get_weight_progress()
@@ -485,7 +513,9 @@ elif page == "📅 Calendar":
         if prog:
             st.success(f"**{prog['focus']}** day!")
             for ex in prog["exercises"]:
-                st.write(f"• {ex['name']} – {ex['sets']}×{ex['reps']} {f'({ex[\"notes\"]})' if ex.get('notes') else ''}")
+                notes = ex.get('notes','')
+                notes_str = f" ({notes})" if notes else ""
+                st.write(f"• **{ex['name']}** – {ex['sets']}×{ex['reps']}{notes_str}")
             if st.button("Log This Workout"):
                 st.session_state.current_exercises = [{"name":ex['name'],"sets":[{"weight":20,"reps":10,"notes":ex.get('notes','')} for _ in range(ex['sets'])]} for ex in prog["exercises"]]
                 page = "💪 Log Workout"; st.rerun()
@@ -571,7 +601,9 @@ elif page == "🤖 AI Chat":
     st.header("💬 AI Coach")
     if "chat_messages" not in st.session_state: st.session_state.chat_messages = []
     if gym_bro.chat_history and len(st.session_state.chat_messages)==0:
-        for msg in gym_bro.chat_history[-200:]: st.session_state.chat_messages.append({"role":msg["role"],"content":msg["content"]})
+        # Load full history (up to 500 to keep performance)
+        for msg in gym_bro.chat_history[-500:]:
+            st.session_state.chat_messages.append({"role":msg["role"],"content":msg["content"]})
     for msg in st.session_state.chat_messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
@@ -619,6 +651,7 @@ Be encouraging, use 'bro' & emojis. Create complete programs. Notice plateaus an
             try:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                 messages = [{"role":"system","content":system_prompt}]
+                # Send last 60 messages for context
                 messages.extend(st.session_state.chat_messages[-60:])
                 response = client.chat.completions.create(
                     model="gpt-4-turbo", messages=messages, functions=functions,
