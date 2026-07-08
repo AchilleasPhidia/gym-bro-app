@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Fixed calendar, profile in sidebar, futuristic UI)
+# app.py – Gym Bro X (Profile in sidebar, fixed error, clean UI)
 
 import streamlit as st
 import json, random, os, shutil, re, calendar
@@ -386,11 +386,12 @@ if not gym_bro.profile:
 if "current_page" not in st.session_state: st.session_state.current_page = "📅 Workout Calendar"
 
 st.markdown('<div class="fixed-nav">', unsafe_allow_html=True)
-cols = st.columns(5)
-pages = ["👤 Profile", "💪 Log Workout", "📊 Progress", "📅 Workout Calendar", "🤖 AI Chat"]
+cols = st.columns(4)
+pages = ["💪 Log Workout", "📊 Progress", "📅 Workout Calendar", "🤖 AI Chat"]
 for idx, page_name in enumerate(pages):
     with cols[idx]:
-        if st.button(page_name, key=f"nav_{page_name}", use_container_width=True, type="primary" if st.session_state.current_page == page_name else "secondary"):
+        if st.button(page_name, key=f"nav_{page_name}", use_container_width=True,
+                     type="primary" if st.session_state.current_page == page_name else "secondary"):
             st.session_state.current_page = page_name; st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 page = st.session_state.current_page
@@ -407,7 +408,7 @@ with st.sidebar:
         c1,c2,c3 = st.columns(3)
         c1.metric("🔥", streak["current"]); c2.metric("👑", streak["longest"]); c3.metric("📅", f"{streak['week']}/7")
     st.markdown("---")
-    # Profile summary in sidebar
+    # Profile in sidebar
     if gym_bro.profile:
         with st.expander("👤 Your Profile", expanded=False):
             p = gym_bro.profile
@@ -434,7 +435,8 @@ with st.sidebar:
                         gym_bro.setup_profile(new_profile)
                         gym_bro.add_body_measurement(weight, body_fat if body_fat>0 else None, "Profile update")
                         gym_bro.generate_program()
-                        st.session_state.edit_profile = False; st.rerun()
+                        st.session_state.edit_profile = False
+                        st.rerun()
     st.markdown("---")
     if "delete_mode" not in st.session_state: st.session_state.delete_mode = False
     if not st.session_state.delete_mode:
@@ -451,38 +453,7 @@ with st.sidebar:
 # ============================================
 # PAGE CONTENT
 # ============================================
-if page == "👤 Profile":
-    st.header("Your Profile")
-    p = gym_bro.profile
-    col1, col2, col3 = st.columns(3)
-    with col1: st.markdown(f"**Age:** {p.get('age','?')}"); st.markdown(f"**Height:** {p.get('height','?')} cm")
-    with col2: st.markdown(f"**Gender:** {p.get('gender','?')}"); w = gym_bro.body_measurements[-1]["weight"] if gym_bro.body_measurements else '?'; st.markdown(f"**Weight:** {w} kg")
-    with col3: st.markdown(f"**Goal:** {p.get('primary_goal','?')}"); st.markdown(f"**Experience:** {p.get('experience','?')}")
-    if st.button("✏️ Edit Full Profile"): st.session_state.edit_profile = True
-    if st.session_state.get("edit_profile"):
-        with st.form("full_edit_form"):
-            age = st.number_input("Age",10,100,p.get("age",25))
-            gender = st.selectbox("Gender",["Male","Female","Other"],index=["Male","Female","Other"].index(p.get("gender","Male")) if p.get("gender","Male") in ["Male","Female","Other"] else 0)
-            height = st.number_input("Height (cm)",100,250,p.get("height",175))
-            w_last = gym_bro.body_measurements[-1]["weight"] if gym_bro.body_measurements else 75.0
-            bf_last = gym_bro.body_measurements[-1].get("body_fat",0.0) if gym_bro.body_measurements else 0.0
-            weight = st.number_input("Weight (kg)",30.0,300.0,w_last)
-            body_fat = st.number_input("Body fat %",0.0,60.0,bf_last,step=0.1)
-            experience = st.selectbox("Experience",["Beginner","Intermediate","Advanced"],index=["Beginner","Intermediate","Advanced"].index(p.get("experience","Beginner")))
-            training_days = st.slider("Days/week",1,7,p.get("training_days",4))
-            session_length = st.selectbox("Session length",["30 min","45 min","60 min","75 min","90 min"],index=["30 min","45 min","60 min","75 min","90 min"].index(p.get("session_length","60 min")))
-            primary_goal = st.selectbox("Primary goal",["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness"],index=["Build muscle","Lose fat","Get stronger","Improve endurance","Tone up","General fitness"].index(p.get("primary_goal","Build muscle")))
-            if st.form_submit_button("💾 Save"):
-                new_profile = {"age":age,"gender":gender,"height":height,"experience":experience,"training_days":training_days,"session_length":session_length,"primary_goal":primary_goal}
-                gym_bro.setup_profile(new_profile); gym_bro.add_body_measurement(weight, body_fat if body_fat>0 else None, "Profile update"); gym_bro.generate_program(); st.session_state.edit_profile = False; st.rerun()
-    if len(gym_bro.body_measurements)>1:
-        wd = gym_bro.get_weight_progress()
-        if wd:
-            fig = go.Figure(); fig.add_trace(go.Scatter(x=wd["dates"],y=wd["weights"],mode='lines+markers',name='Weight'))
-            if any(bf is not None for bf in wd["body_fats"]): fig.add_trace(go.Scatter(x=wd["dates"],y=wd["body_fats"],mode='lines+markers',name='Body Fat %',yaxis='y2'))
-            fig.update_layout(height=300); st.plotly_chart(fig, use_container_width=True, key="weight_chart")
-
-elif page == "💪 Log Workout":
+if page == "💪 Log Workout":
     st.header("Log Workout")
     col1, col2, col3 = st.columns(3)
     energy = col1.slider("⚡ Energy", 1, 10, 7); sleep = col2.slider("😴 Sleep", 1, 10, 7); duration = col3.number_input("⏱️ Minutes", 15, 180, 45)
@@ -599,9 +570,9 @@ elif page == "📅 Workout Calendar":
                             class_str = "calendar-day"
                             if trained: class_str += " trained"
                             if is_today: class_str += " today"
-                            # Make the div clickable via st.markdown with a link that sets session state via query params? Use callback on button with unique key but hidden label.
-                            if st.button(f"{day_num}", key=f"cal_{d}", help=d.strftime("%B %d, %Y"), on_click=lambda d=d: st.session_state.update({"selected_cal_day": d.isoformat()})):
-                                pass
+                            if st.button(f"{day_num}", key=f"cal_{d}", help=d.strftime("%B %d, %Y")):
+                                st.session_state.selected_cal_day = d.isoformat()
+                                st.rerun()
             st.markdown("---")
             if st.session_state.get("selected_cal_day"):
                 sel_date = date.fromisoformat(st.session_state.selected_cal_day)
