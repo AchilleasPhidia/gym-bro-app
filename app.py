@@ -1,4 +1,4 @@
-# app.py – Gym Bro v8.1 (with automatic data migration)
+# app.py – Gym Bro v8.1 (duplicate chart ID fixed, migration, profile, AI)
 
 import streamlit as st
 import json
@@ -22,7 +22,7 @@ class GymBro:
         self.data_dir = f"user_data/{username}"
         os.makedirs(self.data_dir, exist_ok=True)
 
-        # --- Automatic migration of old root-level files ---
+        # Automatic migration of old root-level files
         old_files = [
             "workouts.json", "progress.json", "achievements.json",
             "custom_exercises.json", "user_profile.json",
@@ -34,7 +34,6 @@ class GymBro:
             if os.path.exists(old_path) and not os.path.exists(new_path):
                 shutil.move(old_path, new_path)
 
-        # Load data from the user's folder
         self.workouts = self._load_json("workouts.json", [])
         self.exercise_progress = self._load_json("progress.json", {})
         self.achievements = self._load_json("achievements.json", [])
@@ -146,7 +145,6 @@ Consider their experience, equipment, injuries, and goals."""
                     return prog
         except:
             pass
-        # Offline fallback
         days = self.profile.get('training_days', 4)
         days_map = {2: ["Monday", "Thursday"], 3: ["Monday", "Wednesday", "Friday"],
                     4: ["Monday", "Tuesday", "Thursday", "Friday"],
@@ -299,7 +297,7 @@ Consider their experience, equipment, injuries, and goals."""
         }
 
 # ============================================
-# STREAMLIT UI (unchanged from your last working version)
+# STREAMLIT UI
 # ============================================
 
 st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
@@ -664,7 +662,7 @@ with tab0:
                     fig.add_trace(go.Scatter(x=weight_data["dates"], y=weight_data["body_fats"], 
                                             mode='lines+markers', name='Body Fat %', yaxis='y2'))
                 fig.update_layout(height=300, margin=dict(l=0,r=0,t=0,b=0))
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, key="weight_progress_chart")
 
 # --- TAB 1: CALENDAR ---
 with tab1:
@@ -800,7 +798,7 @@ with tab2:
                     for pr in result["new_prs"]:
                         st.markdown(f'<div class="pr-badge">{pr["exercise"]}: +{pr["improvement"]}%</div>', unsafe_allow_html=True)
 
-# --- TAB 3: PROGRESS ---
+# --- TAB 3: PROGRESS (fixed duplicate chart key) ---
 with tab3:
     st.header("Your Progress")
     progress = gym_bro.get_progress()
@@ -819,7 +817,7 @@ with tab3:
                     rms = [h["estimated_1rm"] for h in hist]
                     fig = go.Figure(data=go.Scatter(x=dates, y=rms, mode='lines+markers'))
                     fig.update_layout(height=250, margin=dict(l=0,r=0,t=0,b=0))
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, use_container_width=True, key=f"progress_chart_{exercise}")
         if gym_bro.achievements:
             st.markdown("---")
             st.subheader("🏆 Achievements")
