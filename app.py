@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Complete, working top nav, robust AI, all features)
+# app.py – Gym Bro X (Robust JSON parsing, sticky nav, all features)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -33,7 +33,7 @@ def init_set_state():
                 else: st.session_state[key] = ""
 
 # ============================================
-# GYM BRO CLASS (full power, memory, learning)
+# GYM BRO CLASS
 # ============================================
 class GymBro:
     def __init__(self, username="default"):
@@ -649,7 +649,9 @@ Tools:
 - log_todays_workout(exercises)   <-- each exercise MUST have "name" and "sets" array. Each set must have "weight" (>0), "reps" (>0), optional "notes". Example: [{{"name":"Squat","sets":[{{"weight":100,"reps":5,"notes":""}}]}}]
 - save_learned_knowledge(fact)
 
-Be encouraging, use 'bro' & emojis. Create complete programs. Notice plateaus and suggest changes. When creating a program, always output the FULL JSON with 'program_name' and 'days'."""
+IMPORTANT: When the user asks you to create or update a program, you MUST respond with ONLY a valid JSON object, using the create_program function. The JSON must contain 'program_name' and 'days'. Do not include any other text, explanations, or greetings. Just the raw JSON inside the function call.
+
+Be encouraging, use 'bro' & emojis. Create complete programs. Notice plateaus and suggest changes."""
 
     functions = [
         {"name":"create_program","description":"Create/update workout program.","parameters":{"type":"object","properties":{"program_json":{"type":"string","description":"Full program JSON with escaped quotes"}},"required":["program_json"]}},
