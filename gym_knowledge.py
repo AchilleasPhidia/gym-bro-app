@@ -1,4 +1,4 @@
-# gym_knowledge.py – Extended knowledge for Gym Bro X
+# gym_knowledge.py – Extended knowledge base for Gym Bro X
 
 EXERCISE_DB = {
     "barbell_back_squat": {
@@ -84,7 +84,6 @@ EXERCISE_DB = {
             "Squeeze shoulder blades at top"
         ]
     }
-    # Add many more exercises as needed
 }
 
 TRAINING_PRINCIPLES = {
@@ -104,7 +103,6 @@ TRAINING_PRINCIPLES = {
 }
 
 def get_knowledge_text():
-    """Return a condensed text summary of the exercise DB and principles."""
     text = "Exercise database:\n"
     for key, ex in EXERCISE_DB.items():
         text += f"- {ex['name']}: targets {', '.join(ex['primary'])}. Cues: {'; '.join(ex['form_cues'][:3])}.\n"

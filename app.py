@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Sticky nav, beautiful UI, robust AI, no session-state writes)
+# app.py – Gym Bro X (Final, all fixes, sticky nav, robust AI, beautiful UI)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -574,48 +574,63 @@ if page == "👤 Profile":
 
 elif page == "💪 Log Workout":
     st.header("Log Workout")
-    col1,col2,col3 = st.columns(3)
-    energy = col1.slider("⚡ Energy",1,10,7)
-    sleep = col2.slider("😴 Sleep",1,10,7)
-    duration = col3.number_input("⏱️ Minutes",15,180,45)
-    common_ex = ["Barbell Squat","Deadlift","Bench Press","Overhead Press","Barbell Row","Pull-ups","Lat Pulldowns","Dumbbell Press","Lateral Raises","Bicep Curls","Tricep Pushdowns","Leg Press","Romanian Deadlift","Face Pulls","Planks","Lunges","Calf Raises","Dips","Push-ups"]
+    col1, col2, col3 = st.columns(3)
+    energy = col1.slider("⚡ Energy", 1, 10, 7)
+    sleep = col2.slider("😴 Sleep", 1, 10, 7)
+    duration = col3.number_input("⏱️ Minutes", 15, 180, 45)
+
+    common_ex = [
+        "Barbell Squat", "Deadlift", "Bench Press", "Overhead Press",
+        "Barbell Row", "Pull-ups", "Lat Pulldowns", "Dumbbell Press",
+        "Lateral Raises", "Bicep Curls", "Tricep Pushdowns", "Leg Press",
+        "Romanian Deadlift", "Face Pulls", "Planks", "Lunges",
+        "Calf Raises", "Dips", "Push-ups"
+    ]
     all_ex = common_ex + gym_bro.custom_exercises
-    mode = st.radio("Select or custom",["📋 List","✏️ Custom"],horizontal=True)
-    if mode.startswith("📋"): ex_name = st.selectbox("Exercise",all_ex)
+    mode = st.radio("Select or custom", ["📋 List", "✏️ Custom"], horizontal=True)
+    if mode.startswith("📋"):
+        ex_name = st.selectbox("Exercise", all_ex)
     else:
         ex_name = st.text_input("Exercise name")
         if ex_name and ex_name not in gym_bro.custom_exercises:
-            if st.button("Save custom"): gym_bro.custom_exercises.append(ex_name); gym_bro._save_json("custom_exercises.json",gym_bro.custom_exercises); st.success(f"Saved {ex_name}!")
-    num_sets = st.selectbox("Sets",[1,2,3,4,5],index=2)
+            if st.button("Save custom"):
+                gym_bro.custom_exercises.append(ex_name)
+                gym_bro._save_json("custom_exercises.json", gym_bro.custom_exercises)
+                st.success(f"Saved {ex_name}!")
 
-    # ---- Safe set data handling (no direct session_state writes) ----
+    num_sets = st.selectbox("Sets", [1, 2, 3, 4, 5], index=2)
+
     # Set 1
-    w0 = st.number_input("Set 1 Weight (kg)",0.0,500.0,value=st.session_state.get("last_weight",20.0),key="w0")
-    r0 = st.number_input("Set 1 Reps",1,30,value=st.session_state.get("last_reps",10),key="r0")
-    n0 = st.text_input("Set 1 Notes",value=st.session_state.get("last_notes",""),key="n0")
-    sets_data = [{"weight":w0,"reps":r0,"notes":n0}]
+    w0 = st.number_input("Set 1 Weight (kg)", 0.0, 500.0,
+                         value=st.session_state.get("last_weight", 20.0), key="w0_main")
+    r0 = st.number_input("Set 1 Reps", 1, 30,
+                         value=st.session_state.get("last_reps", 10), key="r0_main")
+    n0 = st.text_input("Set 1 Notes",
+                       value=st.session_state.get("last_notes", ""), key="n0_main")
+    sets_data = [{"weight": w0, "reps": r0, "notes": n0}]
 
-    # "Apply to all" button
+    # Apply to all button
     if num_sets > 1:
-        if st.button("⬇️ Apply Set 1 to all"):
+        if st.button("⬇️ Apply Set 1 to all other sets"):
             st.session_state.applied_weight = w0
             st.session_state.applied_reps = r0
             st.session_state.applied_notes = n0
+            st.success("Set 1 values applied to all sets!")
             st.rerun()
 
     # Sets 2+
     for i in range(1, num_sets):
-        def_weight = st.session_state.get("applied_weight", 20.0)
-        def_reps = st.session_state.get("applied_reps", 10)
-        def_notes = st.session_state.get("applied_notes", "")
-        w = st.number_input(f"Set {i+1} Weight",0.0,500.0,value=def_weight,key=f"w{i}")
-        r = st.number_input(f"Set {i+1} Reps",1,30,value=def_reps,key=f"r{i}")
-        n = st.text_input(f"Set {i+1} Notes",value=def_notes,key=f"n{i}")
-        sets_data.append({"weight":w,"reps":r,"notes":n})
+        def_w = st.session_state.get("applied_weight", st.session_state.get("last_weight", 20.0))
+        def_r = st.session_state.get("applied_reps", st.session_state.get("last_reps", 10))
+        def_n = st.session_state.get("applied_notes", st.session_state.get("last_notes", ""))
+
+        w = st.number_input(f"Set {i+1} Weight", 0.0, 500.0, value=def_w, key=f"w{i}_set")
+        r = st.number_input(f"Set {i+1} Reps", 1, 30, value=def_r, key=f"r{i}_set")
+        n = st.text_input(f"Set {i+1} Notes", value=def_n, key=f"n{i}_set")
+        sets_data.append({"weight": w, "reps": r, "notes": n})
 
     if st.button("➕ Add to workout"):
-        st.session_state.current_exercises.append({"name":ex_name,"sets":sets_data})
-        # Remember last used values for next exercise
+        st.session_state.current_exercises.append({"name": ex_name, "sets": sets_data})
         st.session_state.last_weight = w0
         st.session_state.last_reps = r0
         st.session_state.last_notes = n0
@@ -625,32 +640,36 @@ elif page == "💪 Log Workout":
         st.rerun()
 
     if st.session_state.current_exercises:
-        for i,ex in enumerate(st.session_state.current_exercises):
-            st.markdown(f"**{ex.get('name','?')}**")
-            for j,s in enumerate(ex.get("sets",[])): st.caption(f"Set {j+1}: {s.get('weight',0)}kg × {s.get('reps',0)}")
-            if st.button("🗑️",key=f"del_{i}"): st.session_state.current_exercises.pop(i); st.rerun()
-        if st.button("✅ Complete Workout",type="primary"):
-            result = gym_bro.log_workout(st.session_state.current_exercises,energy,sleep,duration)
+        for i, ex in enumerate(st.session_state.current_exercises):
+            st.markdown(f"**{ex.get('name', '?')}**")
+            for j, s in enumerate(ex.get("sets", [])):
+                st.caption(f"Set {j+1}: {s.get('weight', 0)}kg × {s.get('reps', 0)}")
+            if st.button("🗑️", key=f"del_{i}"):
+                st.session_state.current_exercises.pop(i)
+                st.rerun()
+        if st.button("✅ Complete Workout", type="primary"):
+            result = gym_bro.log_workout(st.session_state.current_exercises, energy, sleep, duration)
             st.session_state.current_exercises = []
             st.balloons()
             st.success(result["feedback"])
             if result["new_prs"]:
-                for pr in result["new_prs"]: st.markdown(f"🏆 {pr['exercise']}: +{pr['improvement']}%")
+                for pr in result["new_prs"]:
+                    st.markdown(f"🏆 {pr['exercise']}: +{pr['improvement']}%")
 
 elif page == "📊 Progress":
     st.header("Progress")
     progress = gym_bro.get_progress()
     if not progress: st.info("Log workouts to see progress!")
     else:
-        for ex,data in progress.items():
+        for ex, data in progress.items():
             with st.expander(f"{ex} ({data['sessions']} sessions)"):
-                c1,c2,c3 = st.columns(3)
-                c1.metric("Best",f"{data['current']}kg")
-                c2.metric("First",f"{data['first']}kg")
-                c3.metric("Change",f"{data['change']}%",data['trend'])
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Best", f"{data['current']}kg")
+                c2.metric("First", f"{data['first']}kg")
+                c3.metric("Change", f"{data['change']}%", data['trend'])
                 if ex in gym_bro.exercise_progress:
                     hist = gym_bro.exercise_progress[ex]
-                    fig = go.Figure(go.Scatter(x=[h["date"][:10] for h in hist],y=[h["estimated_1rm"] for h in hist],mode='lines+markers'))
+                    fig = go.Figure(go.Scatter(x=[h["date"][:10] for h in hist], y=[h["estimated_1rm"] for h in hist], mode='lines+markers'))
                     fig.update_layout(height=250)
                     st.plotly_chart(fig, use_container_width=True, key=f"prog_{ex}")
 
@@ -661,7 +680,7 @@ elif page == "🎯 My Program":
     else:
         prog = gym_bro.current_program
         st.subheader(prog.get("program_name", "Your Personalised Plan"))
-        days_of_week = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+        days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         planned = {d["day"]: d for d in prog.get("days", [])}
         for day in days_of_week:
             if day in planned:
@@ -695,9 +714,9 @@ elif page == "🎯 My Program":
 elif page == "🤖 AI Chat":
     st.header("💬 AI Coach")
     if "chat_messages" not in st.session_state: st.session_state.chat_messages = []
-    if gym_bro.chat_history and len(st.session_state.chat_messages)==0:
+    if gym_bro.chat_history and len(st.session_state.chat_messages) == 0:
         for msg in gym_bro.chat_history[-500:]:
-            st.session_state.chat_messages.append({"role":msg["role"],"content":msg["content"]})
+            st.session_state.chat_messages.append({"role": msg["role"], "content": msg["content"]})
     for msg in st.session_state.chat_messages:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
@@ -736,19 +755,19 @@ Example of a valid program_json string:
 Now respond to the user."""
 
     functions = [
-        {"name":"create_program","description":"Create/update workout program.","parameters":{"type":"object","properties":{"program_json":{"type":"string","description":"Full program JSON"}},"required":["program_json"]}},
-        {"name":"log_todays_workout","description":"Log a completed workout.","parameters":{"type":"object","properties":{"exercises":{"type":"string","description":"JSON array of exercises"}},"required":["exercises"]}},
-        {"name":"search_web","description":"Search the internet.","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}},
-        {"name":"save_learned_knowledge","description":"Save a fact.","parameters":{"type":"object","properties":{"fact":{"type":"string"}},"required":["fact"]}}
+        {"name": "create_program", "description": "Create/update workout program.", "parameters": {"type": "object", "properties": {"program_json": {"type": "string", "description": "Full program JSON"}}, "required": ["program_json"]}},
+        {"name": "log_todays_workout", "description": "Log a completed workout.", "parameters": {"type": "object", "properties": {"exercises": {"type": "string", "description": "JSON array of exercises"}}, "required": ["exercises"]}},
+        {"name": "search_web", "description": "Search the internet.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
+        {"name": "save_learned_knowledge", "description": "Save a fact.", "parameters": {"type": "object", "properties": {"fact": {"type": "string"}}, "required": ["fact"]}}
     ]
 
     if prompt := st.chat_input("Ask anything..."):
-        st.session_state.chat_messages.append({"role":"user","content":prompt})
-        gym_bro.save_chat_message("user",prompt)
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        gym_bro.save_chat_message("user", prompt)
         with st.spinner("Thinking..."):
             try:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-                messages = [{"role":"system","content":system_prompt}]
+                messages = [{"role": "system", "content": system_prompt}]
                 messages.extend(st.session_state.chat_messages[-60:])
                 response = client.chat.completions.create(
                     model="gpt-4-turbo", messages=messages, functions=functions,
@@ -767,14 +786,13 @@ Now respond to the user."""
                         try:
                             args = json.loads(repaired)
                         except:
-                            st.session_state.chat_messages.append({"role":"assistant","content":f"Sorry bro, couldn't process that. Raw: {raw_args[:200]}"})
+                            st.session_state.chat_messages.append({"role": "assistant", "content": f"Sorry bro, couldn't process that. Raw: {raw_args[:200]}"})
                             st.rerun()
 
                     if fc.name == "create_program":
                         program_json_str = args.get("program_json", "")
                         if not program_json_str and "program_name" in args:
                             program_json_str = json.dumps(args)
-                        # Remove code fences if present
                         program_json_str = re.sub(r'^```json\s*', '', program_json_str)
                         program_json_str = re.sub(r'\s*```$', '', program_json_str)
                         prog, err = parse_program_payload(program_json_str)
@@ -793,11 +811,11 @@ Now respond to the user."""
                             clean = []
                             for ex in exercises:
                                 if not isinstance(ex, dict): continue
-                                name = ex.get("name","Unknown")
-                                sets = ex.get("sets",[])
-                                if not isinstance(sets, list): sets=[]
-                                valid = [s for s in sets if isinstance(s,dict) and s.get("weight",0)>0]
-                                if valid: clean.append({"name":name,"sets":valid})
+                                name = ex.get("name", "Unknown")
+                                sets = ex.get("sets", [])
+                                if not isinstance(sets, list): sets = []
+                                valid = [s for s in sets if isinstance(s, dict) and s.get("weight", 0) > 0]
+                                if valid: clean.append({"name": name, "sets": valid})
                             if not clean: raise ValueError("No valid exercises")
                             result = gym_bro.log_workout(clean, 7, 7, 60)
                             reply = f"Workout logged! {result['feedback']}"
@@ -814,7 +832,7 @@ Now respond to the user."""
                         reply = f"🧠 Learned: {args['fact']}"
                     else:
                         reply = "Unknown function."
-                    st.session_state.chat_messages.append({"role":"assistant","content":reply})
+                    st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                     gym_bro.save_chat_message("assistant", reply)
                 else:
                     # Fallback: detect program JSON directly in text
@@ -825,10 +843,10 @@ Now respond to the user."""
                         reply = "✅ Program updated from your message! Check the Calendar."
                     else:
                         reply = msg.content
-                    st.session_state.chat_messages.append({"role":"assistant","content":reply})
+                    st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                     gym_bro.save_chat_message("assistant", reply)
             except Exception as e:
-                st.session_state.chat_messages.append({"role":"assistant","content":f"Error: {e}"})
+                st.session_state.chat_messages.append({"role": "assistant", "content": f"Error: {e}"})
             st.rerun()
 
 st.markdown("---")
