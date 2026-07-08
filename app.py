@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Top navigation, delete user, all sections working)
+# app.py – Gym Bro X (Fixed session state, sticky top nav, full features)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -22,6 +22,19 @@ def delete_user_folder(username):
         shutil.rmtree(folder)
         return True
     return False
+
+def init_set_state():
+    """Ensure set input keys exist in session state."""
+    for i in range(5):
+        for prefix in ["w_", "r_", "n_"]:
+            key = f"{prefix}{i}"
+            if key not in st.session_state:
+                if prefix == "w_":
+                    st.session_state[key] = 20.0
+                elif prefix == "r_":
+                    st.session_state[key] = 10
+                else:
+                    st.session_state[key] = ""
 
 # ============================================
 # GYM BRO CLASS (full power, memory, learning)
@@ -296,9 +309,10 @@ if not st.session_state.logged_in:
                         st.session_state.selected_user = user
                         st.session_state.gym_bro = GymBro(user)
                         st.session_state.current_user = user
-                        st.session_state.show_intro = False  # will be set if no profile
+                        st.session_state.show_intro = False
                         st.session_state.current_exercises = []
                         st.session_state.chat_messages = []
+                        init_set_state()
                         st.session_state.logged_in = True
                         st.rerun()
         else:
@@ -311,9 +325,10 @@ if not st.session_state.logged_in:
                 st.session_state.selected_user = new_user
                 st.session_state.gym_bro = GymBro(new_user)
                 st.session_state.current_user = new_user
-                st.session_state.show_intro = True  # will trigger profile setup
+                st.session_state.show_intro = True
                 st.session_state.current_exercises = []
                 st.session_state.chat_messages = []
+                init_set_state()
                 st.session_state.logged_in = True
                 st.rerun()
             elif new_user in get_existing_users():
@@ -325,6 +340,9 @@ if not st.session_state.logged_in:
 # ============================================
 gym_bro = st.session_state.gym_bro
 username = st.session_state.current_user
+
+# Ensure set state is always initialised
+init_set_state()
 
 # ---------- Profile setup (first time) ----------
 if not gym_bro.profile:
@@ -378,7 +396,25 @@ if not gym_bro.profile:
             st.session_state.show_intro = False; st.rerun()
     st.stop()
 
-# ---------- Sidebar (logout, streaks, delete) ----------
+# ---------- Sticky Top Navigation ----------
+st.markdown("""
+<style>
+.sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    background: #0f0c29;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="sticky-nav">', unsafe_allow_html=True)
+page = st.radio("", ["👤 Profile", "💪 Log Workout", "📊 Progress", "🎯 My Program", "🤖 AI Chat"], horizontal=True, label_visibility="collapsed")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ---------- Sidebar ----------
 with st.sidebar:
     st.title("Gym Bro X")
     st.markdown(f"Logged in as **{username}**")
@@ -395,7 +431,6 @@ with st.sidebar:
         c3.metric("📅", f"{streak['week']}/7")
 
     st.markdown("---")
-    # Delete user button with confirmation
     if "delete_mode" not in st.session_state:
         st.session_state.delete_mode = False
     if not st.session_state.delete_mode:
@@ -403,7 +438,7 @@ with st.sidebar:
             st.session_state.delete_mode = True
             st.rerun()
     else:
-        st.warning(f"Permanently delete **{username}** and all data? This cannot be undone.")
+        st.warning(f"Permanently delete **{username}** and all data?")
         col1, col2 = st.columns(2)
         with col1:
             if st.button("Yes, delete", type="primary"):
@@ -415,11 +450,6 @@ with st.sidebar:
             if st.button("Cancel"):
                 st.session_state.delete_mode = False
                 st.rerun()
-
-# ---------- Top Navigation ----------
-st.markdown("---")
-page = st.radio("", ["👤 Profile", "💪 Log Workout", "📊 Progress", "🎯 My Program", "🤖 AI Chat"], horizontal=True, label_visibility="collapsed")
-st.markdown("---")
 
 # ---------- Main Content ----------
 if page == "👤 Profile":
