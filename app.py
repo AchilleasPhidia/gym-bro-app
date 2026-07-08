@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Final, all fixes, sticky nav, robust AI, beautiful UI)
+# app.py – Gym Bro X (Final, fully working apply button, sticky nav, robust AI)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -600,43 +600,48 @@ elif page == "💪 Log Workout":
 
     num_sets = st.selectbox("Sets", [1, 2, 3, 4, 5], index=2)
 
+    # Initialize set widget keys with last used values (only once)
+    for i in range(num_sets):
+        if f"w{i}_set" not in st.session_state:
+            st.session_state[f"w{i}_set"] = st.session_state.get("last_weight", 20.0)
+        if f"r{i}_set" not in st.session_state:
+            st.session_state[f"r{i}_set"] = st.session_state.get("last_reps", 10)
+        if f"n{i}_set" not in st.session_state:
+            st.session_state[f"n{i}_set"] = st.session_state.get("last_notes", "")
+
     # Set 1
-    w0 = st.number_input("Set 1 Weight (kg)", 0.0, 500.0,
-                         value=st.session_state.get("last_weight", 20.0), key="w0_main")
-    r0 = st.number_input("Set 1 Reps", 1, 30,
-                         value=st.session_state.get("last_reps", 10), key="r0_main")
-    n0 = st.text_input("Set 1 Notes",
-                       value=st.session_state.get("last_notes", ""), key="n0_main")
+    w0 = st.number_input("Set 1 Weight (kg)", 0.0, 500.0, key="w0_set")
+    r0 = st.number_input("Set 1 Reps", 1, 30, key="r0_set")
+    n0 = st.text_input("Set 1 Notes", key="n0_set")
     sets_data = [{"weight": w0, "reps": r0, "notes": n0}]
 
-    # Apply to all button
+    # Apply to all button (updates session state keys for sets 2+)
     if num_sets > 1:
         if st.button("⬇️ Apply Set 1 to all other sets"):
-            st.session_state.applied_weight = w0
-            st.session_state.applied_reps = r0
-            st.session_state.applied_notes = n0
-            st.success("Set 1 values applied to all sets!")
+            for i in range(1, num_sets):
+                st.session_state[f"w{i}_set"] = w0
+                st.session_state[f"r{i}_set"] = r0
+                st.session_state[f"n{i}_set"] = n0
             st.rerun()
 
-    # Sets 2+
+    # Sets 2+ (read directly from session state via keys)
     for i in range(1, num_sets):
-        def_w = st.session_state.get("applied_weight", st.session_state.get("last_weight", 20.0))
-        def_r = st.session_state.get("applied_reps", st.session_state.get("last_reps", 10))
-        def_n = st.session_state.get("applied_notes", st.session_state.get("last_notes", ""))
-
-        w = st.number_input(f"Set {i+1} Weight", 0.0, 500.0, value=def_w, key=f"w{i}_set")
-        r = st.number_input(f"Set {i+1} Reps", 1, 30, value=def_r, key=f"r{i}_set")
-        n = st.text_input(f"Set {i+1} Notes", value=def_n, key=f"n{i}_set")
+        w = st.number_input(f"Set {i+1} Weight", 0.0, 500.0, key=f"w{i}_set")
+        r = st.number_input(f"Set {i+1} Reps", 1, 30, key=f"r{i}_set")
+        n = st.text_input(f"Set {i+1} Notes", key=f"n{i}_set")
         sets_data.append({"weight": w, "reps": r, "notes": n})
 
     if st.button("➕ Add to workout"):
         st.session_state.current_exercises.append({"name": ex_name, "sets": sets_data})
+        # Remember for next exercise
         st.session_state.last_weight = w0
         st.session_state.last_reps = r0
         st.session_state.last_notes = n0
-        st.session_state.pop("applied_weight", None)
-        st.session_state.pop("applied_reps", None)
-        st.session_state.pop("applied_notes", None)
+        # Clear set keys so next exercise starts fresh
+        for i in range(num_sets):
+            st.session_state.pop(f"w{i}_set", None)
+            st.session_state.pop(f"r{i}_set", None)
+            st.session_state.pop(f"n{i}_set", None)
         st.rerun()
 
     if st.session_state.current_exercises:
