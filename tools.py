@@ -1,8 +1,10 @@
-# tools.py – robust exercise parsing, web search, and form analysis
+# tools.py – Ultra‑robust JSON parser, web search, form analysis
+
 import json, re, io, base64
 from duckduckgo_search import DDGS
 from PIL import Image
 
+# ---------- Web Search ----------
 def search_exercises(query: str, max_results: int = 3) -> str:
     try:
         with DDGS() as ddgs:
@@ -16,6 +18,7 @@ def search_exercises(query: str, max_results: int = 3) -> str:
     except Exception as e:
         return f"Search failed: {e}"
 
+# ---------- Form Analysis (GPT‑4 Vision) ----------
 def analyze_form(image_file, client) -> str:
     try:
         image = Image.open(image_file)
@@ -39,13 +42,44 @@ def analyze_form(image_file, client) -> str:
     except Exception as e:
         return f"Form analysis failed: {e}"
 
+# ---------- JSON Repair & Parsing ----------
+def repair_json(j_str: str) -> str:
+    """Try to fix common JSON errors."""
+    # Remove trailing commas before closing brackets/braces
+    j_str = re.sub(r',\s*([}\]])', r'\1', j_str)
+    # Remove any text after the final closing brace
+    last_brace = j_str.rfind('}')
+    if last_brace != -1:
+        j_str = j_str[:last_brace+1]
+    # Balance braces and brackets
+    open_braces = j_str.count('{') - j_str.count('}')
+    open_brackets = j_str.count('[') - j_str.count(']')
+    j_str += ']' * max(0, open_brackets) + '}' * max(0, open_braces)
+    # Fix unterminated strings – add closing quote if a string is cut off
+    # Simple heuristic: if we have an odd number of unescaped quotes, add one at the end
+    # Count unescaped quotes
+    cleaned = re.sub(r'\\"', '', j_str)
+    if cleaned.count('"') % 2 != 0:
+        j_str += '"'
+    # Escape unescaped newlines inside strings (common AI mistake)
+    j_str = j_str.replace('\n', '\\n')
+    return j_str
+
 def parse_program_payload(text: str):
+    """
+    Extract a valid program JSON from any text.
+    Returns (program_dict, error_msg). One will be None.
+    """
     if not text:
         return None, "Empty response."
+
+    # Attempt 1: Standard JSON code block
     match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
     if not match:
+        # Attempt 2: Look for a JSON object containing "program_name"
         match = re.search(r'(\{[^{}]*"program_name"[^{}]*\})', text, re.DOTALL)
         if not match:
+            # Attempt 3: Find first { and last } and hope it's complete
             first = text.find('{')
             last = text.rfind('}')
             if first != -1 and last > first:
@@ -54,30 +88,42 @@ def parse_program_payload(text: str):
                     match = re.search(r'(\{.*\})', candidate, re.DOTALL)
     if not match:
         return None, "No JSON object with 'program_name' and 'days' found."
+
     raw_json = match.group(1)
-    raw_json = re.sub(r',\s*([}\]])', r'\1', raw_json)
-    last_brace = raw_json.rfind('}')
-    if last_brace != -1:
-        raw_json = raw_json[:last_brace+1]
+
+    # Try as-is
     try:
         prog = json.loads(raw_json)
+        if "program_name" in prog and "days" in prog:
+            return prog, None
     except json.JSONDecodeError:
-        open_b = raw_json.count('{') - raw_json.count('}')
-        open_s = raw_json.count('[') - raw_json.count(']')
-        raw_json += ']' * open_s + '}' * open_b
-        try:
-            prog = json.loads(raw_json)
-        except json.JSONDecodeError as e:
-            return None, f"JSON decode error: {e}"
-    if not isinstance(prog, dict) or "program_name" not in prog or "days" not in prog:
-        return None, "Missing required keys."
-    return prog, None
+        pass
+
+    # Try repaired
+    repaired = repair_json(raw_json)
+    try:
+        prog = json.loads(repaired)
+        if "program_name" in prog and "days" in prog:
+            return prog, None
+    except json.JSONDecodeError:
+        pass
+
+    # Last resort: maybe it's double‑encoded (a string containing JSON)
+    try:
+        inner = json.loads(raw_json)
+        if isinstance(inner, str):
+            return parse_program_payload(inner)
+    except:
+        pass
+
+    return None, f"Could not parse program JSON. Raw snippet: {raw_json[:200]}..."
 
 def normalize_exercises(program: dict):
     exercises = []
     for day in program.get("days", []):
+        day_name = day.get("day", "Unknown")
         for ex in day.get("exercises", []):
-            name = ex.get("name", "Unnamed Exercise")
+            name = ex.get("name", "exercise")
             sets_data = []
             sets_field = ex.get("sets", 3)
             if isinstance(sets_field, list):

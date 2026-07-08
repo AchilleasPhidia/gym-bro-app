@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Robust JSON parsing, sticky nav, all features)
+# app.py – Gym Bro X (AI‑controlled, bulletproof, fully personalised)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -406,11 +406,7 @@ st.markdown("""
     border-bottom: 1px solid rgba(255,255,255,0.1);
     margin-bottom: 1rem;
 }
-.nav-btn {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: center;
-}
+.nav-btn { display: flex; gap: 0.5rem; justify-content: center; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -638,32 +634,32 @@ RECENT WORKOUTS:
 STRENGTH PROGRESS:
 {progress_summary}
 
-KNOWLEDGE:
+KNOWLEDGE BASE:
 {knowledge}
 
 {learned}
 
-Tools:
-- search_web(query)
-- create_program(program_json)
-- log_todays_workout(exercises)   <-- each exercise MUST have "name" and "sets" array. Each set must have "weight" (>0), "reps" (>0), optional "notes". Example: [{{"name":"Squat","sets":[{{"weight":100,"reps":5,"notes":""}}]}}]
-- save_learned_knowledge(fact)
+You have the following tools:
+- create_program(program_json) : call this with a JSON string of the new workout program. The JSON must have 'program_name' and 'days'. Each day has 'day', 'focus', and 'exercises' (list of {{"name","sets","reps","notes"}}). Make sure all strings are properly escaped.
+- log_todays_workout(exercises) : call this with a JSON string of an array of exercises. Each exercise must have "name" and "sets" (array of {{"weight","reps","notes"}}).
+- search_web(query) : search for exercise science, tips, etc.
+- save_learned_knowledge(fact) : remember a useful fact permanently.
 
-IMPORTANT: When the user asks you to create or update a program, you MUST respond with ONLY a valid JSON object, using the create_program function. The JSON must contain 'program_name' and 'days'. Do not include any other text, explanations, or greetings. Just the raw JSON inside the function call.
+IMPORTANT: When you need to create or update a program, ALWAYS use the create_program function. Do not just talk about it. Provide the full program JSON as the argument.
 
-Be encouraging, use 'bro' & emojis. Create complete programs. Notice plateaus and suggest changes."""
+Be encouraging, use 'bro' and emojis. Be proactive – if you notice a plateau, suggest changes. Personalise every response based on the user's profile and history."""
 
     functions = [
-        {"name":"create_program","description":"Create/update workout program.","parameters":{"type":"object","properties":{"program_json":{"type":"string","description":"Full program JSON with escaped quotes"}},"required":["program_json"]}},
-        {"name":"log_todays_workout","description":"Log a completed workout.","parameters":{"type":"object","properties":{"exercises":{"type":"string","description":"JSON list of exercises. Each must have name and sets array."}},"required":["exercises"]}},
-        {"name":"search_web","description":"Search the internet.","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}},
-        {"name":"save_learned_knowledge","description":"Save a fact permanently.","parameters":{"type":"object","properties":{"fact":{"type":"string"}},"required":["fact"]}}
+        {"name":"create_program","description":"Create or update the user's workout program. Provide the complete program as a JSON string.","parameters":{"type":"object","properties":{"program_json":{"type":"string","description":"Full program JSON with escaped quotes"}},"required":["program_json"]}},
+        {"name":"log_todays_workout","description":"Log a completed workout. Provide a JSON string of an array of exercises.","parameters":{"type":"object","properties":{"exercises":{"type":"string","description":"JSON array of exercises. Each must have name and sets array."}},"required":["exercises"]}},
+        {"name":"search_web","description":"Search the internet for exercise-related information.","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}},
+        {"name":"save_learned_knowledge","description":"Save a useful fact permanently.","parameters":{"type":"object","properties":{"fact":{"type":"string"}},"required":["fact"]}}
     ]
 
     if prompt := st.chat_input("Ask anything..."):
         st.session_state.chat_messages.append({"role":"user","content":prompt})
         gym_bro.save_chat_message("user",prompt)
-        with st.spinner("Thinking..."):
+        with st.spinner("Gym Bro is thinking..."):
             try:
                 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
                 messages = [{"role":"system","content":system_prompt}]
@@ -675,42 +671,80 @@ Be encouraging, use 'bro' & emojis. Create complete programs. Notice plateaus an
                 msg = response.choices[0].message
                 if msg.function_call:
                     fc = msg.function_call
-                    args = json.loads(fc.arguments)
-                    if fc.name=="create_program":
-                        prog,err = parse_program_payload(args["program_json"])
-                        if prog: gym_bro.current_program = prog; gym_bro._save_json("current_program.json",prog); reply = "✅ Program updated!"
-                        else: reply = f"Error: {err}"
-                    elif fc.name=="log_todays_workout":
+                    raw_args = fc.arguments
+                    try:
+                        args = json.loads(raw_args)
+                    except json.JSONDecodeError:
+                        # Repair common issues in the arguments
+                        repaired = raw_args
+                        repaired = re.sub(r'(?<!\\)"', r'\\"', repaired)  # escape unescaped quotes
+                        repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
                         try:
-                            raw = args["exercises"]
-                            try: exercises = json.loads(raw)
-                            except: exercises = json.loads(re.sub(r'(?<!\\)"',r'\\"',raw))
-                            if not isinstance(exercises,list): raise ValueError("List required")
+                            args = json.loads(repaired)
+                        except:
+                            st.session_state.chat_messages.append({"role":"assistant","content":f"Sorry bro, I couldn't process that request. Raw args: {raw_args[:200]}"})
+                            st.rerun()
+
+                    if fc.name == "create_program":
+                        try:
+                            program_json_str = args.get("program_json", "")
+                            if not program_json_str:
+                                # Maybe the AI passed the JSON directly as the argument? (some models do this)
+                                if "program_name" in args and "days" in args:
+                                    program_json_str = json.dumps(args)
+                            prog, err = parse_program_payload(program_json_str)
+                            if prog:
+                                gym_bro.current_program = prog
+                                gym_bro._save_json("current_program.json", prog)
+                                reply = "✅ Program updated! Check your calendar."
+                            else:
+                                reply = f"Couldn't update program: {err}"
+                        except Exception as e:
+                            reply = f"Error creating program: {e}"
+
+                    elif fc.name == "log_todays_workout":
+                        try:
+                            raw_exercises = args.get("exercises", "[]")
+                            try: exercises = json.loads(raw_exercises)
+                            except: exercises = json.loads(re.sub(r'(?<!\\)"',r'\\"',raw_exercises))
+                            if not isinstance(exercises, list): raise ValueError("List required")
                             clean = []
                             for ex in exercises:
-                                if not isinstance(ex,dict): continue
+                                if not isinstance(ex, dict): continue
                                 name = ex.get("name","Unknown")
                                 sets = ex.get("sets",[])
-                                if not isinstance(sets,list): sets=[]
+                                if not isinstance(sets, list): sets=[]
                                 valid = [s for s in sets if isinstance(s,dict) and s.get("weight",0)>0]
                                 if valid: clean.append({"name":name,"sets":valid})
                             if not clean: raise ValueError("No valid exercises")
-                            result = gym_bro.log_workout(clean,7,7,60)
+                            result = gym_bro.log_workout(clean, 7, 7, 60)
                             reply = f"Workout logged! {result['feedback']}"
-                        except Exception as e: reply = f"Log failed: {e}"
-                    elif fc.name=="search_web":
-                        results = search_exercises(args["query"])
+                        except Exception as e:
+                            reply = f"Couldn't log workout: {e}"
+
+                    elif fc.name == "search_web":
+                        query = args.get("query", "")
+                        results = search_exercises(query)
                         reply = f"Search results:\n{results}"
-                        if results and "Link:" in results: gym_bro.add_learned_knowledge(f"Search '{args['query']}': {results[:200]}")
-                    elif fc.name=="save_learned_knowledge":
-                        gym_bro.add_learned_knowledge(args["fact"])
-                        reply = f"🧠 Learned: {args['fact']}"
-                    else: reply = "Unknown function."
-                else: reply = msg.content
-            except Exception as e: reply = f"Error: {e}"
-        st.session_state.chat_messages.append({"role":"assistant","content":reply})
-        gym_bro.save_chat_message("assistant",reply)
-        st.rerun()
+                        if results and "Link:" in results:
+                            gym_bro.add_learned_knowledge(f"From search '{query}': {results[:200]}")
+
+                    elif fc.name == "save_learned_knowledge":
+                        gym_bro.add_learned_knowledge(args.get("fact", ""))
+                        reply = f"🧠 Learned and saved: {args['fact']}"
+
+                    else:
+                        reply = "Unknown function."
+
+                    st.session_state.chat_messages.append({"role":"assistant","content":reply})
+                    gym_bro.save_chat_message("assistant", reply)
+                else:
+                    reply = msg.content
+                    st.session_state.chat_messages.append({"role":"assistant","content":reply})
+                    gym_bro.save_chat_message("assistant", reply)
+            except Exception as e:
+                st.session_state.chat_messages.append({"role":"assistant","content":f"Error: {e}"})
+            st.rerun()
 
 st.markdown("---")
 st.caption(f"Gym Bro X | User: {username} | We go jim! 💎")
