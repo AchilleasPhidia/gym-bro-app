@@ -1,4 +1,4 @@
-# app.py – Gym Bro v8.1 (duplicate chart ID fixed, migration, profile, AI)
+# app.py – Gym Bro v8.1 (safe day lookup, all fixes, migration, AI)
 
 import streamlit as st
 import json
@@ -145,6 +145,7 @@ Consider their experience, equipment, injuries, and goals."""
                     return prog
         except:
             pass
+        # Offline fallback
         days = self.profile.get('training_days', 4)
         days_map = {2: ["Monday", "Thursday"], 3: ["Monday", "Wednesday", "Friday"],
                     4: ["Monday", "Tuesday", "Thursday", "Friday"],
@@ -669,15 +670,16 @@ with tab1:
     st.header("Your Training Calendar")
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
-    days_of_week = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+    days_of_week = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
     cols = st.columns(7)
     workout_dates = {datetime.fromisoformat(w["date"]).date() for w in gym_bro.workouts}
     planned_days = set()
     if gym_bro.current_program:
         for d in gym_bro.current_program["days"]:
-            day_name = d["day"]
-            idx = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].index(day_name)
-            planned_days.add(week_start + timedelta(days=idx))
+            day_name = d.get("day", "").strip().title()
+            if day_name in days_of_week:
+                idx = days_of_week.index(day_name)
+                planned_days.add(week_start + timedelta(days=idx))
     for i, col in enumerate(cols):
         day = week_start + timedelta(days=i)
         is_trained = day in workout_dates
@@ -686,20 +688,20 @@ with tab1:
         if is_trained: class_name += " trained"
         elif is_planned and day >= today: class_name += " planned"
         with col:
-            st.markdown(f'<div class="{class_name}"><strong>{days_of_week[i]}</strong><span>{day.day}</span><br>{"✅" if is_trained else "📋" if is_planned and day >= today else ""}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="{class_name}"><strong>{days_of_week[i][:3]}</strong><span>{day.day}</span><br>{"✅" if is_trained else "📋" if is_planned and day >= today else ""}</div>', unsafe_allow_html=True)
     st.caption("✅ Trained   📋 Planned")
     st.markdown("---")
     st.subheader("Today's Session")
     if gym_bro.current_program:
         today_name = today.strftime("%A")
-        today_prog = next((d for d in gym_bro.current_program["days"] if d["day"] == today_name), None)
+        today_prog = next((d for d in gym_bro.current_program["days"] if d["day"].strip().title() == today_name), None)
         if today_prog:
-            st.success(f"🎯 **{today_prog['focus']}** day!")
-            for ex in today_prog["exercises"]:
+            st.success(f"🎯 **{today_prog.get('focus','')}** day!")
+            for ex in today_prog.get("exercises", []):
                 st.write(f"• **{ex.get('name','')}** – {ex.get('sets','?')}×{ex.get('reps','?')} {('('+ex.get('notes','')+')') if ex.get('notes') else ''}")
             if st.button("Log This Workout", type="primary"):
                 st.session_state.current_exercises = []
-                for ex in today_prog["exercises"]:
+                for ex in today_prog.get("exercises", []):
                     sets = [{"weight": 20.0, "reps": 10, "notes": ex.get('notes','')} for _ in range(ex.get('sets',3))]
                     st.session_state.current_exercises.append({"name": ex['name'], "sets": sets})
                 st.rerun()
@@ -834,11 +836,13 @@ with tab4:
     else:
         prog = gym_bro.current_program
         st.subheader(prog.get("program_name", "My Program"))
-        for d in prog["days"]:
-            with st.expander(f"📅 {d['day']} – {d['focus']}"):
-                for ex in d["exercises"]:
+        for d in prog.get("days", []):
+            day_name = d.get("day", "Unknown").strip().title()
+            focus = d.get("focus", "General")
+            with st.expander(f"📅 {day_name} – {focus}"):
+                for ex in d.get("exercises", []):
                     n = ex.get("notes","")
-                    st.write(f"• **{ex['name']}** – {ex.get('sets','?')}×{ex.get('reps','?')} {f'({n})' if n else ''}")
+                    st.write(f"• **{ex.get('name','')}** – {ex.get('sets','?')}×{ex.get('reps','?')} {f'({n})' if n else ''}")
         if st.button("🔄 Regenerate Program"):
             gym_bro.generate_program()
             st.rerun()
