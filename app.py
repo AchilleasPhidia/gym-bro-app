@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Stunning UI, perfect light/dark, all features)
+# app.py – Gym Bro X Final (Polished UI, all fixes, smart AI)
 
 import streamlit as st
 import json, random, os, shutil, re, calendar
@@ -24,7 +24,7 @@ def delete_user_folder(username):
     return False
 
 # ============================================
-# GYM BRO CLASS (unchanged, full implementation)
+# GYM BRO CLASS
 # ============================================
 class GymBro:
     def __init__(self, username="default"):
@@ -256,7 +256,6 @@ st.set_page_config(page_title="Gym Bro X", page_icon="💎", layout="wide")
 
 if "theme" not in st.session_state: st.session_state.theme = "dark"
 
-# ---------- COMPLETELY REDESIGNED UI ----------
 if st.session_state.theme == "dark":
     st.markdown("""
     <style>
@@ -496,7 +495,7 @@ with st.sidebar:
             if st.button("Cancel"): st.session_state.delete_mode = False; st.rerun()
 
 # ============================================
-# PAGE CONTENT (unchanged from previous working version)
+# PAGE CONTENT
 # ============================================
 if page == "💪 Log Workout":
     st.header("Log Workout")

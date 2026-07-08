@@ -1,4 +1,4 @@
-# gym_knowledge.py – Extended knowledge base for Gym Bro X
+# gym_knowledge.py – Gym Bro X Final
 
 EXERCISE_DB = {
     "barbell_back_squat": {
