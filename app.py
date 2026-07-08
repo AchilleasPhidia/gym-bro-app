@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Beautiful UI, Sticky Nav, My Program redesign, no regenerate button)
+# app.py – Gym Bro X (Sticky nav, beautiful UI, robust AI, no session-state writes)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -22,15 +22,6 @@ def delete_user_folder(username):
         shutil.rmtree(folder)
         return True
     return False
-
-def init_set_state():
-    for i in range(5):
-        for prefix in ["w_", "r_", "n_"]:
-            key = f"{prefix}{i}"
-            if key not in st.session_state:
-                if prefix == "w_": st.session_state[key] = 20.0
-                elif prefix == "r_": st.session_state[key] = 10
-                else: st.session_state[key] = ""
 
 # ============================================
 # GYM BRO CLASS (full implementation)
@@ -376,7 +367,6 @@ if not st.session_state.logged_in:
                         st.session_state.show_intro = False
                         st.session_state.current_exercises = []
                         st.session_state.chat_messages = []
-                        init_set_state()
                         st.session_state.logged_in = True
                         st.session_state.current_page = "👤 Profile"
                         st.rerun()
@@ -393,7 +383,6 @@ if not st.session_state.logged_in:
                 st.session_state.show_intro = True
                 st.session_state.current_exercises = []
                 st.session_state.chat_messages = []
-                init_set_state()
                 st.session_state.logged_in = True
                 st.session_state.current_page = "👤 Profile"
                 st.rerun()
@@ -406,7 +395,6 @@ if not st.session_state.logged_in:
 # ============================================
 gym_bro = st.session_state.gym_bro
 username = st.session_state.current_user
-init_set_state()
 
 # ---------- Profile Setup ----------
 if not gym_bro.profile:
@@ -599,24 +587,43 @@ elif page == "💪 Log Workout":
         if ex_name and ex_name not in gym_bro.custom_exercises:
             if st.button("Save custom"): gym_bro.custom_exercises.append(ex_name); gym_bro._save_json("custom_exercises.json",gym_bro.custom_exercises); st.success(f"Saved {ex_name}!")
     num_sets = st.selectbox("Sets",[1,2,3,4,5],index=2)
-    sets_data = []
-    w0 = st.number_input("Set 1 Weight (kg)",0.0,500.0,st.session_state.w_0,key="w_0")
-    r0 = st.number_input("Set 1 Reps",1,30,st.session_state.r_0,key="r_0")
-    n0 = st.text_input("Set 1 Notes",st.session_state.n_0,key="n_0")
-    sets_data.append({"weight":w0,"reps":r0,"notes":n0})
-    if num_sets>1:
-        if st.button("⬇️ Apply to all"):
-            for i in range(1,num_sets): st.session_state[f"w_{i}"]=w0; st.session_state[f"r_{i}"]=r0; st.session_state[f"n_{i}"]=n0
+
+    # ---- Safe set data handling (no direct session_state writes) ----
+    # Set 1
+    w0 = st.number_input("Set 1 Weight (kg)",0.0,500.0,value=st.session_state.get("last_weight",20.0),key="w0")
+    r0 = st.number_input("Set 1 Reps",1,30,value=st.session_state.get("last_reps",10),key="r0")
+    n0 = st.text_input("Set 1 Notes",value=st.session_state.get("last_notes",""),key="n0")
+    sets_data = [{"weight":w0,"reps":r0,"notes":n0}]
+
+    # "Apply to all" button
+    if num_sets > 1:
+        if st.button("⬇️ Apply Set 1 to all"):
+            st.session_state.applied_weight = w0
+            st.session_state.applied_reps = r0
+            st.session_state.applied_notes = n0
             st.rerun()
-    for i in range(1,num_sets):
-        w = st.number_input(f"Set {i+1} Weight",0.0,500.0,st.session_state[f"w_{i}"],key=f"w_{i}")
-        r = st.number_input(f"Set {i+1} Reps",1,30,st.session_state[f"r_{i}"],key=f"r_{i}")
-        n = st.text_input(f"Set {i+1} Notes",st.session_state[f"n_{i}"],key=f"n_{i}")
+
+    # Sets 2+
+    for i in range(1, num_sets):
+        def_weight = st.session_state.get("applied_weight", 20.0)
+        def_reps = st.session_state.get("applied_reps", 10)
+        def_notes = st.session_state.get("applied_notes", "")
+        w = st.number_input(f"Set {i+1} Weight",0.0,500.0,value=def_weight,key=f"w{i}")
+        r = st.number_input(f"Set {i+1} Reps",1,30,value=def_reps,key=f"r{i}")
+        n = st.text_input(f"Set {i+1} Notes",value=def_notes,key=f"n{i}")
         sets_data.append({"weight":w,"reps":r,"notes":n})
+
     if st.button("➕ Add to workout"):
         st.session_state.current_exercises.append({"name":ex_name,"sets":sets_data})
-        for i in range(5): st.session_state[f"w_{i}"]=20.0; st.session_state[f"r_{i}"]=10; st.session_state[f"n_{i}"]=""
+        # Remember last used values for next exercise
+        st.session_state.last_weight = w0
+        st.session_state.last_reps = r0
+        st.session_state.last_notes = n0
+        st.session_state.pop("applied_weight", None)
+        st.session_state.pop("applied_reps", None)
+        st.session_state.pop("applied_notes", None)
         st.rerun()
+
     if st.session_state.current_exercises:
         for i,ex in enumerate(st.session_state.current_exercises):
             st.markdown(f"**{ex.get('name','?')}**")
@@ -659,7 +666,6 @@ elif page == "🎯 My Program":
         for day in days_of_week:
             if day in planned:
                 d = planned[day]
-                # Build exercises list as separate HTML strings
                 ex_list = ""
                 for ex in d.get("exercises", []):
                     name = ex.get("name", "?")
@@ -723,7 +729,11 @@ Tools:
 - search_web(query)
 - save_learned_knowledge(fact)
 
-When the user asks for a program change, ALWAYS use create_program. Output ONLY the JSON inside the function call. Ensure all strings are properly escaped. Each day must have a 'focus' and an 'exercises' array. Each exercise must have 'name', 'sets' (number), 'reps' (string like "8-10"), and optional 'notes'."""
+CRITICAL: When the user asks to create or update a workout program, you MUST call the create_program function. The program_json argument must be a valid JSON string containing a JSON object with exactly two keys: "program_name" (string) and "days" (array of objects). Each day object must have "day" (string, e.g. "Monday"), "focus" (string), and "exercises" (array of objects with "name", "sets", "reps", and optional "notes"). DO NOT include any extra text, markdown, or explanations. JUST the JSON inside the function call.
+Example of a valid program_json string:
+{{"program_name":"My Plan","days":[{{"day":"Monday","focus":"Chest","exercises":[{{"name":"Bench Press","sets":3,"reps":"8-10","notes":"control"}}]}}]}}
+
+Now respond to the user."""
 
     functions = [
         {"name":"create_program","description":"Create/update workout program.","parameters":{"type":"object","properties":{"program_json":{"type":"string","description":"Full program JSON"}},"required":["program_json"]}},
@@ -764,6 +774,9 @@ When the user asks for a program change, ALWAYS use create_program. Output ONLY 
                         program_json_str = args.get("program_json", "")
                         if not program_json_str and "program_name" in args:
                             program_json_str = json.dumps(args)
+                        # Remove code fences if present
+                        program_json_str = re.sub(r'^```json\s*', '', program_json_str)
+                        program_json_str = re.sub(r'\s*```$', '', program_json_str)
                         prog, err = parse_program_payload(program_json_str)
                         if prog:
                             gym_bro.current_program = prog
