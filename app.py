@@ -655,17 +655,25 @@ elif page == "🎯 My Program":
         prog = gym_bro.current_program
         st.subheader(prog.get("program_name", "Your Personalised Plan"))
         days_of_week = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
-        # Build a dict of planned days
         planned = {d["day"]: d for d in prog.get("days", [])}
         for day in days_of_week:
             if day in planned:
                 d = planned[day]
+                # Build exercises list as separate HTML strings
+                ex_list = ""
+                for ex in d.get("exercises", []):
+                    name = ex.get("name", "?")
+                    sets = ex.get("sets", "?")
+                    reps = ex.get("reps", "?")
+                    notes = ex.get("notes", "")
+                    note_str = f" ({notes})" if notes else ""
+                    ex_list += f"<li><strong>{name}</strong> – {sets}×{reps}{note_str}</li>"
                 with st.container():
                     st.markdown(f"""
                     <div class="program-card">
                         <h3>📅 {day} – {d.get('focus','Workout')}</h3>
                         <ul>
-                            {"".join(f"<li><strong>{ex.get('name','?')}</strong> – {ex.get('sets','?')}×{ex.get('reps','?')} {f'({ex.get(\"notes\",\"\")})' if ex.get('notes') else ''}</li>" for ex in d.get('exercises',[]))}
+                            {ex_list}
                         </ul>
                     </div>
                     """, unsafe_allow_html=True)
