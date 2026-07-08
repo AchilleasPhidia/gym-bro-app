@@ -1,10 +1,11 @@
-# app.py – Gym Bro X (Final, fully working apply button, sticky nav, robust AI)
+# app.py – Gym Bro X Pro (Proactive AI, export, volume chart, dark/light mode)
 
 import streamlit as st
-import json, random, os, shutil, re
+import json, random, os, shutil, re, csv, io
 from datetime import datetime, timedelta, date
 from typing import Dict, List
 import plotly.graph_objects as go
+import pandas as pd
 from openai import OpenAI
 from tools import search_exercises, analyze_form, parse_program_payload, normalize_exercises
 from gym_knowledge import get_knowledge_text
@@ -24,7 +25,7 @@ def delete_user_folder(username):
     return False
 
 # ============================================
-# GYM BRO CLASS (full implementation)
+# GYM BRO CLASS (unchanged core – same as before)
 # ============================================
 class GymBro:
     def __init__(self, username="default"):
@@ -106,6 +107,16 @@ class GymBro:
         recent = self.workouts[-n:]
         lines = []
         for w in recent:
+            date = w["date"][:10]
+            exs = ", ".join([f"{e.get('name','?')} ({len(e.get('sets',[]))}x)" for e in w["exercises"]])
+            lines.append(f"{date}: {exs}")
+        return "\n".join(lines)
+
+    def get_all_workouts_context(self):
+        """Full history for the AI to analyze long‑term trends."""
+        if not self.workouts: return "No workouts."
+        lines = []
+        for w in self.workouts:
             date = w["date"][:10]
             exs = ", ".join([f"{e.get('name','?')} ({len(e.get('sets',[]))}x)" for e in w["exercises"]])
             lines.append(f"{date}: {exs}")
@@ -262,6 +273,33 @@ Consider their experience, equipment, injuries, and goals."""
                 "weights":[m["weight"] for m in self.body_measurements],
                 "body_fats":[m.get("body_fat") for m in self.body_measurements]}
 
+    def get_weekly_volume(self):
+        """Return weekly total volume for the last 12 weeks."""
+        if not self.workouts: return None
+        weeks = {}
+        for w in self.workouts:
+            d = datetime.fromisoformat(w["date"]).date()
+            iso = d.isocalendar()
+            week_key = f"{iso[0]}-W{iso[1]:02d}"
+            vol = sum(sum(s.get("weight",0)*s.get("reps",0) for s in ex.get("sets",[])) for ex in w["exercises"])
+            weeks[week_key] = weeks.get(week_key, 0) + vol
+        # Sort and take last 12
+        sorted_weeks = sorted(weeks.items())[-12:]
+        return {"weeks": [w[0] for w in sorted_weeks], "volumes": [w[1] for w in sorted_weeks]}
+
+    def export_workouts_csv(self):
+        """Return CSV string of all workouts."""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Date", "Exercise", "Set", "Weight (kg)", "Reps", "Notes", "Energy", "Sleep", "Duration"])
+        for w in self.workouts:
+            d = w["date"][:10]
+            for ex in w["exercises"]:
+                for i, s in enumerate(ex.get("sets", [])):
+                    writer.writerow([d, ex.get("name","?"), i+1, s.get("weight",0), s.get("reps",0), s.get("notes",""),
+                                     w.get("energy_level",""), w.get("sleep_quality",""), w.get("duration_minutes","")])
+        return output.getvalue()
+
     def save_chat_message(self, role, content):
         self.chat_history.append({"role":role,"content":content,"timestamp":datetime.now().isoformat()})
         self._save_json("chat_history.json", self.chat_history)
@@ -277,72 +315,69 @@ Consider their experience, equipment, injuries, and goals."""
 # ============================================
 # LANDING PAGE
 # ============================================
-st.set_page_config(page_title="Gym Bro X", page_icon="💎", layout="wide")
+st.set_page_config(page_title="Gym Bro X Pro", page_icon="💎", layout="wide")
 
-# CSS – vibrant, modern, sticky nav
-st.markdown("""
+# Dark/light mode toggle via session state
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
+
+# CSS with dynamic theme
+theme_bg = "#0f0c29" if st.session_state.theme == "dark" else "#f5f7fb"
+theme_text = "#f5f7fb" if st.session_state.theme == "dark" else "#0f0c29"
+theme_card = "rgba(15,12,41,0.7)" if st.session_state.theme == "dark" else "rgba(255,255,255,0.8)"
+theme_border = "rgba(255,255,255,0.1)" if st.session_state.theme == "dark" else "rgba(0,0,0,0.1)"
+
+st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
-html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
-.main { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); }
-.stApp { background: transparent; }
-[data-testid="stSidebar"] {
-    background: rgba(15,12,41,0.8); backdrop-filter: blur(20px);
-    border-right: 1px solid rgba(255,255,255,0.1);
-}
+html, body, [class*="css"] {{ font-family: 'Outfit', sans-serif; }}
+.main {{ background: linear-gradient(135deg, {theme_bg}, #302b63, #24243e); }}
+.stApp {{ background: transparent; }}
+[data-testid="stSidebar"] {{
+    background: {theme_card}; backdrop-filter: blur(20px);
+    border-right: 1px solid {theme_border};
+    color: {theme_text};
+}}
 
-/* Sticky navigation */
-.sticky-nav {
-    position: -webkit-sticky;
-    position: sticky;
-    top: 0;
-    z-index: 9999;
+.sticky-nav {{
+    position: -webkit-sticky; position: sticky; top: 0; z-index: 9999;
     background: linear-gradient(90deg, #1a1a40, #2d2d6b);
-    padding: 0.6rem 0;
-    border-bottom: 2px solid #ff6b35;
-    margin-bottom: 1.5rem;
-    border-radius: 0 0 20px 20px;
+    padding: 0.6rem 0; border-bottom: 2px solid #ff6b35;
+    margin-bottom: 1.5rem; border-radius: 0 0 20px 20px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-}
-.sticky-nav button {
-    font-weight: 600;
-    letter-spacing: 0.5px;
-}
+}}
+.sticky-nav button {{ font-weight: 600; letter-spacing: 0.5px; }}
 
-/* Cards */
-.program-card {
+.program-card {{
     background: linear-gradient(145deg, #1e1e3f, #2a2a5a);
-    border-radius: 20px;
-    padding: 1.5rem;
-    margin: 0.8rem 0;
-    border-left: 5px solid #ff6b35;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
+    border-left: 5px solid #ff6b35; box-shadow: 0 8px 20px rgba(0,0,0,0.3);
     transition: transform 0.2s;
-}
-.program-card:hover { transform: translateY(-2px); }
-.rest-card {
+}}
+.program-card:hover {{ transform: translateY(-2px); }}
+.rest-card {{
     background: linear-gradient(145deg, #1a1a2e, #252545);
-    border-radius: 20px;
-    padding: 1.5rem;
-    margin: 0.8rem 0;
-    border-left: 5px solid #4ecdc4;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    border-radius: 20px; padding: 1.5rem; margin: 0.8rem 0;
+    border-left: 5px solid #4ecdc4; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     opacity: 0.9;
-}
+}}
 
-/* Buttons */
-.stButton > button {
+.stButton > button {{
     background: linear-gradient(135deg, #ff6b35, #ff8f5e);
     border: none; color: white; border-radius: 20px;
     padding: 0.6rem 2rem; font-weight: 600; transition: all 0.3s;
-}
-.stButton > button:hover { transform: scale(1.02); box-shadow: 0 8px 25px rgba(255,107,53,0.4); }
+}}
+.stButton > button:hover {{ transform: scale(1.02); box-shadow: 0 8px 25px rgba(255,107,53,0.4); }}
 
-/* Expanders */
-.streamlit-expanderHeader {
-    background: rgba(255,255,255,0.05); border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.1);
-}
+.streamlit-expanderHeader {{
+    background: {theme_card}; border-radius: 12px;
+    border: 1px solid {theme_border};
+}}
+
+/* Dark/light toggle */
+.theme-toggle {{
+    display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -350,8 +385,8 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    st.title("💎 Gym Bro X")
-    st.subheader("Your AI Personal Trainer")
+    st.title("💎 Gym Bro X Pro")
+    st.subheader("Your AI Personal Trainer – Smarter Than Ever")
     existing_users = get_existing_users()
     col1, col2 = st.columns([2,1])
     with col1:
@@ -467,7 +502,15 @@ page = st.session_state.current_page
 
 # ---------- Sidebar ----------
 with st.sidebar:
-    st.title("Gym Bro X")
+    # Dark/light toggle
+    st.markdown('<div class="theme-toggle">', unsafe_allow_html=True)
+    if st.button("🌙" if st.session_state.theme == "dark" else "☀️"):
+        st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
+        st.rerun()
+    st.caption("Toggle theme")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.title("Gym Bro X Pro")
     st.markdown(f"Logged in as **{username}**")
     if st.button("Logout"):
         st.session_state.logged_in = False
@@ -480,6 +523,17 @@ with st.sidebar:
         c1.metric("🔥", streak["current"])
         c2.metric("👑", streak["longest"])
         c3.metric("📅", f"{streak['week']}/7")
+
+    # Proactive AI greeting
+    if gym_bro.workouts:
+        last = gym_bro.workouts[-1]
+        last_date = last["date"][:10]
+        st.markdown(f"**Last workout:** {last_date}")
+        if gym_bro.current_program:
+            today_name = date.today().strftime("%A")
+            today_prog = next((d for d in gym_bro.current_program["days"] if d["day"] == today_name), None)
+            if today_prog:
+                st.success(f"Today: {today_prog['focus']} – {len(today_prog['exercises'])} exercises planned!")
 
     st.markdown("---")
     if "delete_mode" not in st.session_state:
@@ -600,7 +654,7 @@ elif page == "💪 Log Workout":
 
     num_sets = st.selectbox("Sets", [1, 2, 3, 4, 5], index=2)
 
-    # Initialize set widget keys with last used values (only once)
+    # Initialize set widget keys
     for i in range(num_sets):
         if f"w{i}_set" not in st.session_state:
             st.session_state[f"w{i}_set"] = st.session_state.get("last_weight", 20.0)
@@ -609,13 +663,11 @@ elif page == "💪 Log Workout":
         if f"n{i}_set" not in st.session_state:
             st.session_state[f"n{i}_set"] = st.session_state.get("last_notes", "")
 
-    # Set 1
     w0 = st.number_input("Set 1 Weight (kg)", 0.0, 500.0, key="w0_set")
     r0 = st.number_input("Set 1 Reps", 1, 30, key="r0_set")
     n0 = st.text_input("Set 1 Notes", key="n0_set")
     sets_data = [{"weight": w0, "reps": r0, "notes": n0}]
 
-    # Apply to all button (updates session state keys for sets 2+)
     if num_sets > 1:
         if st.button("⬇️ Apply Set 1 to all other sets"):
             for i in range(1, num_sets):
@@ -624,7 +676,6 @@ elif page == "💪 Log Workout":
                 st.session_state[f"n{i}_set"] = n0
             st.rerun()
 
-    # Sets 2+ (read directly from session state via keys)
     for i in range(1, num_sets):
         w = st.number_input(f"Set {i+1} Weight", 0.0, 500.0, key=f"w{i}_set")
         r = st.number_input(f"Set {i+1} Reps", 1, 30, key=f"r{i}_set")
@@ -633,11 +684,9 @@ elif page == "💪 Log Workout":
 
     if st.button("➕ Add to workout"):
         st.session_state.current_exercises.append({"name": ex_name, "sets": sets_data})
-        # Remember for next exercise
         st.session_state.last_weight = w0
         st.session_state.last_reps = r0
         st.session_state.last_notes = n0
-        # Clear set keys so next exercise starts fresh
         for i in range(num_sets):
             st.session_state.pop(f"w{i}_set", None)
             st.session_state.pop(f"r{i}_set", None)
@@ -664,7 +713,8 @@ elif page == "💪 Log Workout":
 elif page == "📊 Progress":
     st.header("Progress")
     progress = gym_bro.get_progress()
-    if not progress: st.info("Log workouts to see progress!")
+    if not progress:
+        st.info("Log workouts to see progress!")
     else:
         for ex, data in progress.items():
             with st.expander(f"{ex} ({data['sessions']} sessions)"):
@@ -677,6 +727,21 @@ elif page == "📊 Progress":
                     fig = go.Figure(go.Scatter(x=[h["date"][:10] for h in hist], y=[h["estimated_1rm"] for h in hist], mode='lines+markers'))
                     fig.update_layout(height=250)
                     st.plotly_chart(fig, use_container_width=True, key=f"prog_{ex}")
+
+    # Weekly volume chart
+    weekly = gym_bro.get_weekly_volume()
+    if weekly:
+        st.markdown("---")
+        st.subheader("📈 Weekly Training Volume")
+        fig2 = go.Figure(go.Bar(x=weekly["weeks"], y=weekly["volumes"], marker_color='#ff6b35'))
+        fig2.update_layout(height=300, xaxis_title="Week", yaxis_title="Volume (kg)")
+        st.plotly_chart(fig2, use_container_width=True, key="weekly_volume")
+
+    # Export button
+    if gym_bro.workouts:
+        st.markdown("---")
+        csv_data = gym_bro.export_workouts_csv()
+        st.download_button("📥 Export Workouts as CSV", data=csv_data, file_name=f"gymbro_{username}_workouts.csv", mime="text/csv")
 
 elif page == "🎯 My Program":
     st.header("My Program")
@@ -726,17 +791,21 @@ elif page == "🤖 AI Chat":
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
     profile_txt = gym_bro.get_profile_context()
+    all_wos = gym_bro.get_all_workouts_context()
     recent_wos = gym_bro.get_recent_workouts_context(5)
     progress_summary = json.dumps(gym_bro.get_progress()) if gym_bro.get_progress() else "None"
     knowledge = get_knowledge_text()
     learned = gym_bro.get_learned_knowledge_text()
 
-    system_prompt = f"""You are Gym Bro X, an expert AI coach with full memory.
+    system_prompt = f"""You are Gym Bro X Pro, an elite AI coach with full memory and access to the user's entire workout history.
 
 USER PROFILE:
 {profile_txt}
 
-RECENT WORKOUTS:
+ENTIRE WORKOUT HISTORY:
+{all_wos}
+
+RECENT WORKOUTS (last 5):
 {recent_wos}
 
 STRENGTH PROGRESS:
@@ -757,7 +826,7 @@ CRITICAL: When the user asks to create or update a workout program, you MUST cal
 Example of a valid program_json string:
 {{"program_name":"My Plan","days":[{{"day":"Monday","focus":"Chest","exercises":[{{"name":"Bench Press","sets":3,"reps":"8-10","notes":"control"}}]}}]}}
 
-Now respond to the user."""
+Analyze the user's entire history. Spot plateaus, suggest deloads, celebrate long‑term progress, and be proactive. Use 'bro' and emojis. You are the best coach in the world."""
 
     functions = [
         {"name": "create_program", "description": "Create/update workout program.", "parameters": {"type": "object", "properties": {"program_json": {"type": "string", "description": "Full program JSON"}}, "required": ["program_json"]}},
@@ -840,7 +909,6 @@ Now respond to the user."""
                     st.session_state.chat_messages.append({"role": "assistant", "content": reply})
                     gym_bro.save_chat_message("assistant", reply)
                 else:
-                    # Fallback: detect program JSON directly in text
                     prog, _ = parse_program_payload(msg.content)
                     if prog:
                         gym_bro.current_program = prog
@@ -855,4 +923,4 @@ Now respond to the user."""
             st.rerun()
 
 st.markdown("---")
-st.caption(f"Gym Bro X | User: {username} | We go jim! 💎")
+st.caption(f"Gym Bro X Pro | User: {username} | We go jim! 💎")
