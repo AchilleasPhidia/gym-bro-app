@@ -1,4 +1,4 @@
-# app.py – Gym Bro v9.1 (Fixed workout logging JSON, self‑learning, full profile edit)
+# app.py – Gym Bro v9.2 (Safe workout logging, AI instructions, full profile, memory)
 
 import streamlit as st
 import json
@@ -190,12 +190,21 @@ Consider their experience, equipment, injuries, and goals."""
         self.workouts.append(workout)
         self._save_json("workouts.json", self.workouts)
         for ex in exercises_data:
-            name = ex["name"]
+            name = ex.get("name", "Unknown Exercise")
+            sets = ex.get("sets", [])
+            if not sets or not isinstance(sets, list):
+                # Skip exercises with no valid sets
+                continue
             if name not in self.exercise_progress:
                 self.exercise_progress[name] = []
-            total_volume = sum(s["weight"] * s["reps"] for s in ex["sets"] if s["weight"] > 0)
-            best_set = max(ex["sets"], key=lambda s: s["weight"] * (1 + s["reps"]/30)) if ex["sets"] else None
-            estimated_1rm = best_set["weight"] * (1 + best_set["reps"]/30) if best_set and best_set["weight"] > 0 else 0
+            total_volume = sum(s.get("weight", 0) * s.get("reps", 0) for s in sets if isinstance(s, dict))
+            # Filter valid sets for max calculation
+            valid_sets = [s for s in sets if isinstance(s, dict) and s.get("weight", 0) > 0]
+            if valid_sets:
+                best_set = max(valid_sets, key=lambda s: s.get("weight", 0) * (1 + s.get("reps", 0)/30))
+                estimated_1rm = best_set.get("weight", 0) * (1 + best_set.get("reps", 0)/30)
+            else:
+                estimated_1rm = 0
             self.exercise_progress[name].append({
                 "date": datetime.now().isoformat(),
                 "volume": total_volume,
@@ -212,29 +221,36 @@ Consider their experience, equipment, injuries, and goals."""
     def _check_prs(self, exercises_data):
         new_prs = []
         for ex in exercises_data:
-            name = ex["name"]
-            if name in self.exercise_progress and len(self.exercise_progress[name]) >= 2:
-                current = max(s["weight"] * (1 + s["reps"]/30) for s in ex["sets"] if s["weight"] > 0)
-                previous = max(e["estimated_1rm"] for e in self.exercise_progress[name][:-1]) if self.exercise_progress[name][:-1] else 0
-                if previous > 0 and current > previous * 1.01:
-                    improvement = round((current - previous)/previous * 100, 1)
-                    new_prs.append({
-                        "exercise": name,
-                        "old_est_1rm": round(previous, 1),
-                        "new_est_1rm": round(current, 1),
-                        "improvement": improvement
-                    })
-                    self.achievements.append({
-                        "type": "PR",
-                        "exercise": name,
-                        "date": datetime.now().isoformat(),
-                        "improvement": improvement
-                    })
+            name = ex.get("name")
+            if not name or name not in self.exercise_progress or len(self.exercise_progress[name]) < 2:
+                continue
+            sets = ex.get("sets", [])
+            if not sets:
+                continue
+            current = max(s.get("weight", 0) * (1 + s.get("reps", 0)/30) for s in sets if isinstance(s, dict) and s.get("weight", 0) > 0)
+            previous = max(e["estimated_1rm"] for e in self.exercise_progress[name][:-1]) if self.exercise_progress[name][:-1] else 0
+            if previous > 0 and current > previous * 1.01:
+                improvement = round((current - previous)/previous * 100, 1)
+                new_prs.append({
+                    "exercise": name,
+                    "old_est_1rm": round(previous, 1),
+                    "new_est_1rm": round(current, 1),
+                    "improvement": improvement
+                })
+                self.achievements.append({
+                    "type": "PR",
+                    "exercise": name,
+                    "date": datetime.now().isoformat(),
+                    "improvement": improvement
+                })
         self._save_json("achievements.json", self.achievements)
         return new_prs
 
     def _generate_feedback(self, workout):
-        total_volume = sum(sum(s["weight"] * s["reps"] for s in ex["sets"]) for ex in workout["exercises"])
+        total_volume = sum(
+            sum(s.get("weight", 0) * s.get("reps", 0) for s in ex.get("sets", []) if isinstance(s, dict))
+            for ex in workout["exercises"]
+        )
         fb = []
         if total_volume > 10000:
             fb.append("Bro, you moved some SERIOUS weight today! 💪")
@@ -242,13 +258,13 @@ Consider their experience, equipment, injuries, and goals."""
             fb.append("Solid volume bro! Building that foundation! 🏗️")
         else:
             fb.append("Good work bro! Every rep counts! 🎯")
-        if workout["energy_level"] >= 8:
+        if workout.get("energy_level", 0) >= 8:
             fb.append("Energy was HIGH today! ⚡")
-        elif workout["energy_level"] >= 5:
+        elif workout.get("energy_level", 0) >= 5:
             fb.append("Good energy bro! 👊")
         else:
             fb.append("You showed up despite low energy – mental toughness! 🧠")
-        if workout["sleep_quality"] <= 5:
+        if workout.get("sleep_quality", 0) <= 5:
             fb.append("Get more sleep tonight bro, recovery is key! 😴")
         return " ".join(fb)
 
@@ -963,7 +979,7 @@ Current Program:
 You can use these tools:
 - search_web(query) – to find the latest exercise science or tips
 - create_program(program_json) – to create or update the user's workout plan
-- log_todays_workout(exercises) – to log a completed workout. The exercises argument must be a JSON list of objects, with double quotes escaped properly, e.g. '[{{\"name\":\"Squat\",\"sets\":[{{\"weight\":100,\"reps\":5,\"notes\":\"\"}}]}}]'
+- log_todays_workout(exercises) – to log a completed workout. The exercises argument MUST be a valid JSON list where each exercise has a "name" and a "sets" array containing objects with "weight", "reps", and optional "notes". All quotes must be properly escaped. Example: [{{\"name\":\"Squat\",\"sets\":[{{\"weight\":100,\"reps\":5,\"notes\":\"\"}}]}}]
 - save_learned_knowledge(fact) – to store a new fact permanently
 
 Always be encouraging, use 'bro', emojis, and hype. When returning JSON strings, escape double quotes with backslashes. When you learn something useful from a web search or from the user, save it with save_learned_knowledge so you remember it forever. If you don't know something, search the web proactively!"""
@@ -988,7 +1004,7 @@ Always be encouraging, use 'bro', emojis, and hype. When returning JSON strings,
                 "properties": {
                     "exercises": {
                         "type": "string",
-                        "description": "JSON list of exercises. Example: [{\"name\":\"Squat\",\"sets\":[{\"weight\":100,\"reps\":5,\"notes\":\"\"}]}]"
+                        "description": "JSON list of exercises. Each exercise must have a 'name' and a 'sets' array. Example: [{\"name\":\"Squat\",\"sets\":[{\"weight\":100,\"reps\":5,\"notes\":\"\"}]}]"
                     }
                 },
                 "required": ["exercises"]
@@ -1065,13 +1081,16 @@ Always be encouraging, use 'bro', emojis, and hype. When returning JSON strings,
                                 try:
                                     exercises = json.loads(raw_exercises)
                                 except json.JSONDecodeError:
-                                    # Fix unescaped quotes and trailing commas
                                     repaired = raw_exercises
                                     repaired = re.sub(r'(?<!\\)"', r'\\"', repaired)
                                     repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
                                     exercises = json.loads(repaired)
                                 if not isinstance(exercises, list):
                                     raise ValueError("Exercises must be a list")
+                                # Ensure each exercise has a name and sets array
+                                for ex in exercises:
+                                    if not isinstance(ex, dict) or "name" not in ex or "sets" not in ex:
+                                        raise ValueError("Each exercise must have 'name' and 'sets'")
                                 result = gym_bro.log_workout(exercises, 7, 7, 60)
                                 reply = f"Workout logged! {result['feedback']}"
                             except Exception as e:
@@ -1079,7 +1098,6 @@ Always be encouraging, use 'bro', emojis, and hype. When returning JSON strings,
                         elif func_name == "search_web":
                             results = search_exercises(args["query"])
                             reply = f"Search results:\n{results}"
-                            # Auto-learn the top result snippet
                             if results and "Link:" in results:
                                 gym_bro.add_learned_knowledge(f"From web search '{args['query']}': {results[:200]}")
                         elif func_name == "save_learned_knowledge":
@@ -1115,4 +1133,4 @@ with tab6:
                     st.error(f"Form analysis failed: {e}")
 
 st.markdown("---")
-st.caption(f"Gym Bro v9.1 | User: {username} | We go jim! 🏋️")
+st.caption(f"Gym Bro v9.2 | User: {username} | We go jim! 🏋️")
