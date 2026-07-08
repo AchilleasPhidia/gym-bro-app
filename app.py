@@ -1,4 +1,4 @@
-# app.py – Gym Bro v8.1 (Fully fixed, profile-aware AI, all features)
+# app.py – Gym Bro v8.1 (with automatic data migration)
 
 import streamlit as st
 import json
@@ -13,7 +13,7 @@ from openai import OpenAI
 from tools import search_exercises, analyze_form, parse_program_payload, normalize_exercises
 
 # ============================================
-# GYM BRO CLASS (comprehensive profile)
+# GYM BRO CLASS (comprehensive profile + migration)
 # ============================================
 
 class GymBro:
@@ -21,6 +21,20 @@ class GymBro:
         self.username = username
         self.data_dir = f"user_data/{username}"
         os.makedirs(self.data_dir, exist_ok=True)
+
+        # --- Automatic migration of old root-level files ---
+        old_files = [
+            "workouts.json", "progress.json", "achievements.json",
+            "custom_exercises.json", "user_profile.json",
+            "current_program.json", "body_measurements.json"
+        ]
+        for fname in old_files:
+            old_path = fname
+            new_path = os.path.join(self.data_dir, fname)
+            if os.path.exists(old_path) and not os.path.exists(new_path):
+                shutil.move(old_path, new_path)
+
+        # Load data from the user's folder
         self.workouts = self._load_json("workouts.json", [])
         self.exercise_progress = self._load_json("progress.json", {})
         self.achievements = self._load_json("achievements.json", [])
@@ -285,7 +299,7 @@ Consider their experience, equipment, injuries, and goals."""
         }
 
 # ============================================
-# STREAMLIT UI
+# STREAMLIT UI (unchanged from your last working version)
 # ============================================
 
 st.set_page_config(page_title="Gym Bro", page_icon="💪", layout="wide")
