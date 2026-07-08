@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (safe key access, all features)
+# app.py – Gym Bro X (Beautiful UI, Sticky Nav, My Program redesign, no regenerate button)
 
 import streamlit as st
 import json, random, os, shutil, re
@@ -288,6 +288,73 @@ Consider their experience, equipment, injuries, and goals."""
 # ============================================
 st.set_page_config(page_title="Gym Bro X", page_icon="💎", layout="wide")
 
+# CSS – vibrant, modern, sticky nav
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
+.main { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); }
+.stApp { background: transparent; }
+[data-testid="stSidebar"] {
+    background: rgba(15,12,41,0.8); backdrop-filter: blur(20px);
+    border-right: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Sticky navigation */
+.sticky-nav {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+    background: linear-gradient(90deg, #1a1a40, #2d2d6b);
+    padding: 0.6rem 0;
+    border-bottom: 2px solid #ff6b35;
+    margin-bottom: 1.5rem;
+    border-radius: 0 0 20px 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+.sticky-nav button {
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* Cards */
+.program-card {
+    background: linear-gradient(145deg, #1e1e3f, #2a2a5a);
+    border-radius: 20px;
+    padding: 1.5rem;
+    margin: 0.8rem 0;
+    border-left: 5px solid #ff6b35;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    transition: transform 0.2s;
+}
+.program-card:hover { transform: translateY(-2px); }
+.rest-card {
+    background: linear-gradient(145deg, #1a1a2e, #252545);
+    border-radius: 20px;
+    padding: 1.5rem;
+    margin: 0.8rem 0;
+    border-left: 5px solid #4ecdc4;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    opacity: 0.9;
+}
+
+/* Buttons */
+.stButton > button {
+    background: linear-gradient(135deg, #ff6b35, #ff8f5e);
+    border: none; color: white; border-radius: 20px;
+    padding: 0.6rem 2rem; font-weight: 600; transition: all 0.3s;
+}
+.stButton > button:hover { transform: scale(1.02); box-shadow: 0 8px 25px rgba(255,107,53,0.4); }
+
+/* Expanders */
+.streamlit-expanderHeader {
+    background: rgba(255,255,255,0.05); border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+</style>
+""", unsafe_allow_html=True)
+
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
@@ -394,15 +461,6 @@ if not gym_bro.profile:
     st.stop()
 
 # ---------- Sticky Top Navigation ----------
-st.markdown("""
-<style>
-.sticky-nav {
-    position: sticky; top: 0; z-index: 9999; background: #0f0c29;
-    padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 1rem;
-}
-</style>
-""", unsafe_allow_html=True)
-
 if "current_page" not in st.session_state:
     st.session_state.current_page = "👤 Profile"
 
@@ -592,22 +650,33 @@ elif page == "📊 Progress":
 elif page == "🎯 My Program":
     st.header("My Program")
     if not gym_bro.current_program:
-        if st.button("Generate Program"): gym_bro.generate_program(); st.rerun()
+        st.info("No program generated yet. Ask the AI to create one! 🤖")
     else:
         prog = gym_bro.current_program
-        st.subheader(prog.get("program_name","Plan"))
-        for d in prog.get("days", []):
-            day_name = d.get("day", "Unknown")
-            focus = d.get("focus", "General")
-            with st.expander(f"{day_name} – {focus}"):
-                for ex in d.get("exercises", []):
-                    name = ex.get("name", "Exercise")
-                    sets = ex.get("sets", "?")
-                    reps = ex.get("reps", "?")
-                    notes = ex.get("notes", "")
-                    notes_str = f" ({notes})" if notes else ""
-                    st.write(f"• **{name}** – {sets}×{reps}{notes_str}")
-        if st.button("🔄 Regenerate"): gym_bro.generate_program(); st.rerun()
+        st.subheader(prog.get("program_name", "Your Personalised Plan"))
+        days_of_week = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+        # Build a dict of planned days
+        planned = {d["day"]: d for d in prog.get("days", [])}
+        for day in days_of_week:
+            if day in planned:
+                d = planned[day]
+                with st.container():
+                    st.markdown(f"""
+                    <div class="program-card">
+                        <h3>📅 {day} – {d.get('focus','Workout')}</h3>
+                        <ul>
+                            {"".join(f"<li><strong>{ex.get('name','?')}</strong> – {ex.get('sets','?')}×{ex.get('reps','?')} {f'({ex.get(\"notes\",\"\")})' if ex.get('notes') else ''}</li>" for ex in d.get('exercises',[]))}
+                        </ul>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                with st.container():
+                    st.markdown(f"""
+                    <div class="rest-card">
+                        <h3>💤 {day} – Recovery / Rest Day</h3>
+                        <p>Active recovery, stretching, or complete rest. Your muscles grow when you rest!</p>
+                    </div>
+                    """, unsafe_allow_html=True)
 
 elif page == "🤖 AI Chat":
     st.header("💬 AI Coach")
