@@ -1,4 +1,4 @@
-# app.py – Gym Bro X Final (Polished UI, all fixes, smart AI)
+# app.py – Gym Bro X (Firestore version, permanent data)
 
 import streamlit as st
 import json, random, os, shutil, re, calendar
@@ -6,71 +6,94 @@ from datetime import datetime, timedelta, date
 from typing import Dict, List
 import plotly.graph_objects as go
 from openai import OpenAI
+import firebase_admin
+from firebase_admin import credentials, firestore
 from tools import search_exercises, analyze_form, parse_program_payload, normalize_exercises
 from gym_knowledge import get_knowledge_text
+
+# ============================================
+# FIREBASE INITIALISATION (once at module level)
+# ============================================
+if not firebase_admin._apps:
+    cred = credentials.Certificate(json.loads(st.secrets["FIREBASE_KEY"]))
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
 
 # ============================================
 # HELPERS
 # ============================================
 def get_existing_users():
-    if not os.path.exists("user_data"): return []
-    return sorted([d for d in os.listdir("user_data") if os.path.isdir(os.path.join("user_data", d))])
+    """Return sorted list of usernames that exist in Firestore."""
+    users = []
+    for doc in db.collection("users").stream():
+        users.append(doc.id)
+    return sorted(users)
 
 def delete_user_folder(username):
-    folder = os.path.join("user_data", username)
-    if os.path.exists(folder):
-        shutil.rmtree(folder)
-        return True
-    return False
+    """Delete a user's Firestore document."""
+    db.collection("users").document(username).delete()
+    return True
 
 # ============================================
-# GYM BRO CLASS
+# GYM BRO CLASS (Firestore-backed)
 # ============================================
 class GymBro:
     def __init__(self, username="default"):
         self.username = username
-        self.data_dir = f"user_data/{username}"
-        os.makedirs(self.data_dir, exist_ok=True)
+        self.doc_ref = db.collection("users").document(username)
 
-        for fname in ["workouts.json","progress.json","achievements.json",
-                      "custom_exercises.json","user_profile.json",
-                      "current_program.json","body_measurements.json",
-                      "chat_history.json","learned_knowledge.json"]:
-            old_path = fname
-            new_path = os.path.join(self.data_dir, fname)
-            if os.path.exists(old_path) and not os.path.exists(new_path):
-                shutil.move(old_path, new_path)
+        # Create document if it doesn't exist
+        if not self.doc_ref.get().exists:
+            self.doc_ref.set({
+                "workouts": [],
+                "exercise_progress": {},
+                "achievements": [],
+                "custom_exercises": [],
+                "profile": {},
+                "current_program": None,
+                "body_measurements": [],
+                "chat_history": [],
+                "learned_knowledge": []
+            })
 
-        self.workouts = self._load_json("workouts.json", [])
-        self.exercise_progress = self._load_json("progress.json", {})
-        self.achievements = self._load_json("achievements.json", [])
-        self.custom_exercises = self._load_json("custom_exercises.json", [])
-        self.profile = self._load_json("user_profile.json", {})
-        self.current_program = self._load_json("current_program.json", None)
-        self.body_measurements = self._load_json("body_measurements.json", [])
-        self.chat_history = self._load_json("chat_history.json", [])
-        self.learned_knowledge = self._load_json("learned_knowledge.json", [])
+        data = self.doc_ref.get().to_dict()
+        self.workouts = data.get("workouts", [])
+        self.exercise_progress = data.get("exercise_progress", {})
+        self.achievements = data.get("achievements", [])
+        self.custom_exercises = data.get("custom_exercises", [])
+        self.profile = data.get("profile", {})
+        self.current_program = data.get("current_program", None)
+        self.body_measurements = data.get("body_measurements", [])
+        self.chat_history = data.get("chat_history", [])
+        self.learned_knowledge = data.get("learned_knowledge", [])
 
-    def _load_json(self, filename, default):
-        path = os.path.join(self.data_dir, filename)
-        try:
-            with open(path, 'r') as f: return json.load(f)
-        except: return default
+    def _save_data(self):
+        """Persist entire object to Firestore."""
+        self.doc_ref.set({
+            "workouts": self.workouts,
+            "exercise_progress": self.exercise_progress,
+            "achievements": self.achievements,
+            "custom_exercises": self.custom_exercises,
+            "profile": self.profile,
+            "current_program": self.current_program,
+            "body_measurements": self.body_measurements,
+            "chat_history": self.chat_history,
+            "learned_knowledge": self.learned_knowledge
+        })
 
-    def _save_json(self, filename, data):
-        path = os.path.join(self.data_dir, filename)
-        with open(path, 'w') as f: json.dump(data, f, indent=2, default=str)
-
+    # ---------- Profile ----------
     def setup_profile(self, data):
-        self.profile = {**data, "created": self.profile.get("created", datetime.now().isoformat()),
-                        "last_updated": datetime.now().isoformat()}
-        self._save_json("user_profile.json", self.profile)
+        self.profile = {**data,
+            "created": self.profile.get("created", datetime.now().isoformat()),
+            "last_updated": datetime.now().isoformat()}
+        self._save_data()
 
     def add_body_measurement(self, weight, body_fat=None, notes=""):
         self.body_measurements.append({
             "date": datetime.now().isoformat(), "weight": weight,
             "body_fat": body_fat, "notes": notes})
-        self._save_json("body_measurements.json", self.body_measurements)
+        self._save_data()
 
     def get_profile_context(self) -> str:
         if not self.profile: return "No profile."
@@ -109,6 +132,7 @@ class GymBro:
             lines.append(f"{date}: {exs}")
         return "\n".join(lines)
 
+    # ---------- Program Generation ----------
     def generate_program(self, use_openai=True):
         if not self.profile: return None
         if use_openai:
@@ -123,9 +147,10 @@ class GymBro:
                     prog, _ = parse_program_payload(response.choices[0].message.content)
                     if prog:
                         self.current_program = prog
-                        self._save_json("current_program.json", prog)
+                        self._save_data()
                         return prog
             except: pass
+        # Offline fallback (unchanged)
         days = self.profile.get('training_days',4)
         days_map = {2: ["Monday","Thursday"], 3: ["Monday","Wednesday","Friday"],
                     4: ["Monday","Tuesday","Thursday","Friday"],
@@ -147,14 +172,14 @@ class GymBro:
                 focus="Lower Body"
             program["days"].append({"day":d,"focus":focus,"exercises":exercises})
         self.current_program = program
-        self._save_json("current_program.json", program)
+        self._save_data()
         return program
 
+    # ---------- Workout Logging ----------
     def log_workout(self, exercises_data, energy, sleep, duration):
         workout = {"date": datetime.now().isoformat(), "exercises": exercises_data,
                    "energy_level": energy, "sleep_quality": sleep, "duration_minutes": duration}
         self.workouts.append(workout)
-        self._save_json("workouts.json", self.workouts)
         for ex in exercises_data:
             name = ex.get("name","?")
             sets = ex.get("sets",[])
@@ -165,8 +190,8 @@ class GymBro:
             best = max(valid, key=lambda s: s["weight"]*(1+s["reps"]/30))
             est1rm = best["weight"]*(1+best["reps"]/30)
             self.exercise_progress[name].append({"date":datetime.now().isoformat(),"volume":vol,"estimated_1rm":round(est1rm,1)})
-        self._save_json("progress.json", self.exercise_progress)
         prs = self._check_prs(exercises_data)
+        self._save_data()
         return {"feedback":self._generate_feedback(workout),"new_prs":prs,"total_workouts":len(self.workouts)}
 
     def _check_prs(self, exercises_data):
@@ -182,7 +207,6 @@ class GymBro:
                 imp=round((cur-prev)/prev*100,1)
                 prs.append({"exercise":name,"old_est_1rm":round(prev,1),"new_est_1rm":round(cur,1),"improvement":imp})
                 self.achievements.append({"type":"PR","exercise":name,"date":datetime.now().isoformat(),"improvement":imp})
-        self._save_json("achievements.json",self.achievements)
         return prs
 
     def _generate_feedback(self, workout):
@@ -229,11 +253,11 @@ class GymBro:
 
     def save_chat_message(self, role, content):
         self.chat_history.append({"role":role,"content":content,"timestamp":datetime.now().isoformat()})
-        self._save_json("chat_history.json", self.chat_history)
+        self._save_data()
 
     def add_learned_knowledge(self, fact):
         self.learned_knowledge.append({"fact":fact,"timestamp":datetime.now().isoformat()})
-        self._save_json("learned_knowledge.json", self.learned_knowledge)
+        self._save_data()
 
     def get_learned_knowledge_text(self):
         if not self.learned_knowledge: return ""
@@ -250,12 +274,41 @@ class GymBro:
         return {datetime.fromisoformat(w["date"]).date() for w in self.workouts}
 
 # ============================================
-# LANDING PAGE
+# ONE-TIME MIGRATION (from local files to Firestore)
+# ============================================
+def migrate_local_to_firestore(username):
+    user_dir = f"user_data/{username}"
+    if not os.path.exists(user_dir):
+        st.warning("No local data found.")
+        return
+
+    fields = {}
+    for fname in ["workouts.json","progress.json","achievements.json",
+                  "custom_exercises.json","user_profile.json",
+                  "current_program.json","body_measurements.json",
+                  "chat_history.json","learned_knowledge.json"]:
+        path = os.path.join(user_dir, fname)
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                data = json.load(f)
+            key = fname.replace(".json", "")
+            if key == "user_profile":
+                key = "profile"
+            if key == "progress":
+                key = "exercise_progress"
+            fields[key] = data
+
+    db.collection("users").document(username).set(fields)
+    st.success(f"✅ Data for '{username}' migrated to Firestore!")
+
+# ============================================
+# LANDING PAGE (unchanged UI)
 # ============================================
 st.set_page_config(page_title="Gym Bro X", page_icon="💎", layout="wide")
 
 if "theme" not in st.session_state: st.session_state.theme = "dark"
 
+# (CSS themes remain exactly the same as your last working version – keep them)
 if st.session_state.theme == "dark":
     st.markdown("""
     <style>
@@ -442,6 +495,11 @@ with st.sidebar:
     if theme_toggle != st.session_state.theme: st.session_state.theme = theme_toggle; st.rerun()
     st.markdown(f"Logged in as **{username}**")
     if st.button("Logout"): st.session_state.logged_in = False; st.rerun()
+
+    # --- Migration button (temporary – remove after use) ---
+    if st.sidebar.button("🔄 Migrate local data to cloud"):
+        migrate_local_to_firestore(username)
+
     st.markdown("---")
     if gym_bro.profile:
         streak = gym_bro.get_streak_info()
@@ -495,7 +553,7 @@ with st.sidebar:
             if st.button("Cancel"): st.session_state.delete_mode = False; st.rerun()
 
 # ============================================
-# PAGE CONTENT
+# PAGE CONTENT (identical to your last version)
 # ============================================
 if page == "💪 Log Workout":
     st.header("Log Workout")
@@ -508,7 +566,7 @@ if page == "💪 Log Workout":
     else:
         ex_name = st.text_input("Exercise name")
         if ex_name and ex_name not in gym_bro.custom_exercises:
-            if st.button("Save custom"): gym_bro.custom_exercises.append(ex_name); gym_bro._save_json("custom_exercises.json", gym_bro.custom_exercises); st.success(f"Saved {ex_name}!")
+            if st.button("Save custom"): gym_bro.custom_exercises.append(ex_name); gym_bro._save_data(); st.success(f"Saved {ex_name}!")
     num_sets = st.selectbox("Sets", [1, 2, 3, 4, 5], index=2)
     for i in range(num_sets):
         if f"w{i}_set" not in st.session_state: st.session_state[f"w{i}_set"] = st.session_state.get("last_weight", 20.0)
@@ -719,7 +777,7 @@ Be encouraging, use 'bro' and emojis. Personalise everything. Create programs im
                         prog, err = parse_program_payload(program_json_str)
                         if prog:
                             gym_bro.current_program = prog
-                            gym_bro._save_json("current_program.json", prog)
+                            gym_bro._save_data()
                             reply = "✅ Program updated! Check your calendar."
                         else:
                             reply = f"Couldn't update program: {err}"
@@ -764,7 +822,7 @@ Be encouraging, use 'bro' and emojis. Personalise everything. Create programs im
                     prog, _ = parse_program_payload(msg.content)
                     if prog:
                         gym_bro.current_program = prog
-                        gym_bro._save_json("current_program.json", prog)
+                        gym_bro._save_data()
                         reply = "✅ Program updated from your message! Check the Calendar."
                     else:
                         reply = msg.content
