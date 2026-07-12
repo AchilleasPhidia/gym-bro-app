@@ -1,4 +1,4 @@
-# app.py – Gym Bro X (Firestore version, permanent data)
+# app.py – Gym Bro X (Firestore, Smarter AI, Stunning UI, All Features)
 
 import streamlit as st
 import json, random, os, shutil, re, calendar
@@ -12,7 +12,7 @@ from tools import search_exercises, analyze_form, parse_program_payload, normali
 from gym_knowledge import get_knowledge_text
 
 # ============================================
-# FIREBASE INITIALISATION (once at module level)
+# FIREBASE INITIALISATION
 # ============================================
 if not firebase_admin._apps:
     cred = credentials.Certificate(json.loads(st.secrets["FIREBASE_KEY"]))
@@ -24,14 +24,12 @@ db = firestore.client()
 # HELPERS
 # ============================================
 def get_existing_users():
-    """Return sorted list of usernames that exist in Firestore."""
     users = []
     for doc in db.collection("users").stream():
         users.append(doc.id)
     return sorted(users)
 
 def delete_user_folder(username):
-    """Delete a user's Firestore document."""
     db.collection("users").document(username).delete()
     return True
 
@@ -43,7 +41,6 @@ class GymBro:
         self.username = username
         self.doc_ref = db.collection("users").document(username)
 
-        # Create document if it doesn't exist
         if not self.doc_ref.get().exists:
             self.doc_ref.set({
                 "workouts": [],
@@ -69,7 +66,6 @@ class GymBro:
         self.learned_knowledge = data.get("learned_knowledge", [])
 
     def _save_data(self):
-        """Persist entire object to Firestore."""
         self.doc_ref.set({
             "workouts": self.workouts,
             "exercise_progress": self.exercise_progress,
@@ -150,7 +146,7 @@ class GymBro:
                         self._save_data()
                         return prog
             except: pass
-        # Offline fallback (unchanged)
+        # Offline fallback
         days = self.profile.get('training_days',4)
         days_map = {2: ["Monday","Thursday"], 3: ["Monday","Wednesday","Friday"],
                     4: ["Monday","Tuesday","Thursday","Friday"],
@@ -274,7 +270,7 @@ class GymBro:
         return {datetime.fromisoformat(w["date"]).date() for w in self.workouts}
 
 # ============================================
-# ONE-TIME MIGRATION (from local files to Firestore)
+# ONE-TIME MIGRATION (local → Firestore)
 # ============================================
 def migrate_local_to_firestore(username):
     user_dir = f"user_data/{username}"
@@ -292,23 +288,20 @@ def migrate_local_to_firestore(username):
             with open(path, 'r') as f:
                 data = json.load(f)
             key = fname.replace(".json", "")
-            if key == "user_profile":
-                key = "profile"
-            if key == "progress":
-                key = "exercise_progress"
+            if key == "user_profile": key = "profile"
+            if key == "progress": key = "exercise_progress"
             fields[key] = data
 
     db.collection("users").document(username).set(fields)
     st.success(f"✅ Data for '{username}' migrated to Firestore!")
 
 # ============================================
-# LANDING PAGE (unchanged UI)
+# LANDING PAGE
 # ============================================
 st.set_page_config(page_title="Gym Bro X", page_icon="💎", layout="wide")
 
 if "theme" not in st.session_state: st.session_state.theme = "dark"
 
-# (CSS themes remain exactly the same as your last working version – keep them)
 if st.session_state.theme == "dark":
     st.markdown("""
     <style>
@@ -496,8 +489,8 @@ with st.sidebar:
     st.markdown(f"Logged in as **{username}**")
     if st.button("Logout"): st.session_state.logged_in = False; st.rerun()
 
-    # --- Migration button (temporary – remove after use) ---
-    if st.sidebar.button("🔄 Migrate local data to cloud"):
+    # Migration button (temporary)
+    if st.button("🔄 Migrate local data to cloud"):
         migrate_local_to_firestore(username)
 
     st.markdown("---")
@@ -553,7 +546,7 @@ with st.sidebar:
             if st.button("Cancel"): st.session_state.delete_mode = False; st.rerun()
 
 # ============================================
-# PAGE CONTENT (identical to your last version)
+# PAGE CONTENT
 # ============================================
 if page == "💪 Log Workout":
     st.header("Log Workout")
@@ -720,20 +713,37 @@ elif page == "🤖 AI Chat":
     knowledge = get_knowledge_text()
     learned = gym_bro.get_learned_knowledge_text()
 
-    system_prompt = f"""You are Gym Bro X, a world-class AI fitness coach.
+    system_prompt = f"""You are Gym Bro X, a world-class AI fitness coach with access to the user's full profile, workout history, and progress. You can also search the internet for the latest information.
 
-USER PROFILE: {profile_txt}
-RECENT WORKOUTS: {recent_wos}
-STRENGTH PROGRESS: {progress_summary}
-KNOWLEDGE BASE: {knowledge}
-LEARNED KNOWLEDGE: {learned}
+USER PROFILE:
+{profile_txt}
 
-TOOLS: create_program, log_todays_workout, search_web, save_learned_knowledge.
-Be encouraging, use 'bro' and emojis. Personalise everything. Create programs immediately when asked."""
+RECENT WORKOUTS:
+{recent_wos}
+
+STRENGTH PROGRESS:
+{progress_summary}
+
+KNOWLEDGE BASE:
+{knowledge}
+
+LEARNED KNOWLEDGE:
+{learned}
+
+CRITICAL RULES:
+1. When the user asks you to CREATE, UPDATE, MODIFY, ADD, or REMOVE any workout program, you MUST call the create_program function.
+2. The program_json argument must be a valid JSON string containing an object with exactly two keys: "program_name" (string) and "days" (array of objects).
+3. Each day object must have: "day" (string like "Monday"), "focus" (string), and "exercises" (array of objects).
+4. Each exercise must have: "name" (string), "sets" (number), "reps" (string like "8-10"), and optional "notes" (string).
+5. DO NOT include ANY other text, markdown, or explanations – JUST the JSON inside the function call.
+6. Example of a valid program_json string: {{"program_name":"My Plan","days":[{{"day":"Monday","focus":"Chest","exercises":[{{"name":"Bench Press","sets":3,"reps":"8-10","notes":"control"}}]}}]}}
+7. Include ALL days of the week, even if they are unchanged.
+
+If you are NOT asked to change the program, reply normally like a helpful, encouraging bro coach. Use emojis and 'bro' language. Be proactive – if you notice a plateau, suggest changes."""
 
     functions = [
-        {"name":"create_program","description":"Create/update workout program.","parameters":{"type":"object","properties":{"program_json":{"type":"string"}},"required":["program_json"]}},
-        {"name":"log_todays_workout","description":"Log a completed workout.","parameters":{"type":"object","properties":{"exercises":{"type":"string"}},"required":["exercises"]}},
+        {"name":"create_program","description":"Create/update workout program.","parameters":{"type":"object","properties":{"program_json":{"type":"string","description":"Full program JSON with program_name and days"}},"required":["program_json"]}},
+        {"name":"log_todays_workout","description":"Log a completed workout.","parameters":{"type":"object","properties":{"exercises":{"type":"string","description":"JSON array of exercises with name and sets"}},"required":["exercises"]}},
         {"name":"search_web","description":"Search the internet.","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}},
         {"name":"save_learned_knowledge","description":"Save a fact.","parameters":{"type":"object","properties":{"fact":{"type":"string"}},"required":["fact"]}}
     ]
@@ -819,6 +829,7 @@ Be encouraging, use 'bro' and emojis. Personalise everything. Create programs im
                     else:
                         reply = "Unknown function."
                 else:
+                    # Fallback: detect program JSON directly in text
                     prog, _ = parse_program_payload(msg.content)
                     if prog:
                         gym_bro.current_program = prog
